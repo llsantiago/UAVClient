@@ -1,0 +1,293 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GeoDeploy | Visualizador de Voo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  
+  <!-- Leaflet para 2D -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Three.js para 3D / OBJ / GLTF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+
+  <style>
+    #mapView, #model3DView {
+      height: calc(100vh - 65px);
+      width: 100%;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 flex flex-col h-screen overflow-hidden font-sans">
+  
+  <!-- Header de Navegação -->
+  <header class="h-[65px] border-b border-slate-800 bg-slate-900/80 backdrop-blur px-5 flex items-center justify-between z-30">
+    <div class="flex items-center gap-3">
+      <a href="../" class="text-slate-400 hover:text-white transition p-2 rounded-lg bg-slate-800/60 border border-slate-700/60">
+        <i class="fa-solid fa-arrow-left text-xs"></i>
+      </a>
+      <div>
+        <h1 id="viewTitle" class="font-bold text-sm md:text-base text-white">Levantamento Aéreo</h1>
+        <p id="viewSubtitle" class="text-[11px] text-slate-400">Visualizador DroneDeploy • Hospedado no GitHub Pages</p>
+      </div>
+    </div>
+
+    <!-- Seletor 2D / 3D -->
+    <div class="flex items-center gap-2">
+      <div class="bg-slate-950 border border-slate-800 p-1 rounded-xl flex items-center gap-1">
+        <button id="btn2D" onclick="switchMode('2D')" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 text-white transition flex items-center gap-1.5">
+          <i class="fa-solid fa-map"></i> 2D Ortofoto
+        </button>
+        <button id="btn3D" onclick="switchMode('3D')" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition flex items-center gap-1.5">
+          <i class="fa-solid fa-cube"></i> 3D Modelo
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Área Principal -->
+  <main class="flex-1 relative overflow-hidden">
+    
+    <!-- Visualizador 2D (Leaflet) -->
+    <div id="mapView" class="relative"></div>
+
+    <!-- Visualizador 3D (Three.js WebGL) -->
+    <div id="model3DView" class="hidden relative bg-slate-950 flex items-center justify-center">
+      <div id="canvas3dContainer" class="w-full h-full"></div>
+      <div id="model3DNotice" class="absolute bottom-5 bg-slate-900/90 border border-slate-800 px-4 py-2 rounded-xl text-xs text-slate-300">
+        <i class="fa-solid fa-circle-info text-sky-400 mr-1.5"></i> Gire com o botão esquerdo • Zoom com a roda do mouse • Pan com o botão direito
+      </div>
+    </div>
+
+    <!-- Painel Lateral Flutuante de Medições / Camadas -->
+    <div id="toolsPanel" class="absolute top-4 left-4 z-[400] bg-slate-900/90 border border-slate-800 backdrop-blur-md rounded-2xl p-4 w-72 shadow-xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+        <span class="text-xs font-bold text-slate-200 uppercase tracking-wider">Camadas & Medições</span>
+        <i class="fa-solid fa-ruler-combined text-sky-400 text-xs"></i>
+      </div>
+
+      <div class="space-y-2 text-xs">
+        <label class="flex items-center justify-between text-slate-300">
+          <span>Ortofotomosaico</span>
+          <input type="checkbox" id="layerOrtho" checked onchange="toggleOrtho(this.checked)" class="rounded border-slate-800 bg-slate-950 text-sky-500">
+        </label>
+        <div class="flex items-center justify-between text-slate-400 pt-1">
+          <span>Opacidade:</span>
+          <input type="range" min="0" max="1" step="0.1" value="1" oninput="setOrthoOpacity(this.value)" class="w-24 accent-sky-500">
+        </div>
+      </div>
+
+      <div class="pt-2 border-t border-slate-800 space-y-2">
+        <span class="text-[11px] font-semibold text-slate-400 uppercase">Medições Interativas</span>
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="startMeasureLine()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2 rounded-lg text-xs flex items-center justify-center gap-1.5 border border-slate-700">
+            <i class="fa-solid fa-ruler"></i> Distância
+          </button>
+          <button onclick="startMeasureArea()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2 rounded-lg text-xs flex items-center justify-center gap-1.5 border border-slate-700">
+            <i class="fa-solid fa-draw-polygon"></i> Área
+          </button>
+        </div>
+        <div id="measureOutput" class="text-[11px] text-sky-400 font-mono hidden bg-slate-950 p-2 rounded border border-slate-800"></div>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    let currentMode = '2D';
+    let map = null;
+    let orthoLayer = null;
+    let scene, camera, renderer, controls;
+    let initialized3D = false;
+
+    // Configurações do Voo (edite este config.json ou direto aqui)
+    const flightConfig = {
+      title: "Levantamento Piloto",
+      center: [-15.793889, -47.882778],
+      zoom: 17,
+      tilesUrl: "./tiles/{z}/{x}/{y}.png",
+      orthoImage: "./orthophoto.jpg", // fallback se não tiver pasta de tiles
+      model3d: "./model.obj"
+    };
+
+    function initMap() {
+      document.getElementById('viewTitle').innerText = flightConfig.title;
+
+      map = L.map('mapView').setView(flightConfig.center, flightConfig.zoom);
+
+      // Camada Base Satélite
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Esri Satellite Tiles',
+        maxZoom: 21
+      }).addTo(map);
+
+      // Tenta carregar pasta de tiles ou fallback de imagem
+      orthoLayer = L.tileLayer(flightConfig.tilesUrl, {
+        maxZoom: 22,
+        opacity: 1
+      }).addTo(map);
+
+      orthoLayer.on('tileerror', function() {
+        // Se ainda não existirem tiles geradas, carrega overlay de imagem
+        if (!map.hasLayer(orthoLayerFallback) && flightConfig.orthoImage) {
+          loadFallbackImage();
+        }
+      });
+    }
+
+    let orthoLayerFallback = null;
+    function loadFallbackImage() {
+      const bounds = [
+        [flightConfig.center[0] - 0.003, flightConfig.center[1] - 0.003],
+        [flightConfig.center[0] + 0.003, flightConfig.center[1] + 0.003]
+      ];
+      orthoLayerFallback = L.imageOverlay(flightConfig.orthoImage, bounds, { opacity: 0.95 }).addTo(map);
+      map.fitBounds(bounds);
+    }
+
+    function toggleOrtho(visible) {
+      if (orthoLayer) {
+        if (visible) map.addLayer(orthoLayer);
+        else map.removeLayer(orthoLayer);
+      }
+      if (orthoLayerFallback) {
+        if (visible) map.addLayer(orthoLayerFallback);
+        else map.removeLayer(orthoLayerFallback);
+      }
+    }
+
+    function setOrthoOpacity(val) {
+      const op = parseFloat(val);
+      if (orthoLayer && orthoLayer.setOpacity) orthoLayer.setOpacity(op);
+      if (orthoLayerFallback && orthoLayerFallback.setOpacity) orthoLayerFallback.setOpacity(op);
+    }
+
+    // Ferramentas de Medição
+    let measurePoints = [];
+    let measurePolyline = null;
+    function startMeasureLine() {
+      measurePoints = [];
+      if (measurePolyline) map.removeLayer(measurePolyline);
+      const out = document.getElementById('measureOutput');
+      out.classList.remove('hidden');
+      out.innerText = 'Clique no mapa para medir distância linear...';
+      map.on('click', onMeasureClick);
+    }
+
+    function onMeasureClick(e) {
+      measurePoints.push(e.latlng);
+      if (measurePoints.length > 1) {
+        if (!measurePolyline) {
+          measurePolyline = L.polyline(measurePoints, { color: '#0ea5e9', weight: 4 }).addTo(map);
+        } else {
+          measurePolyline.setLatLngs(measurePoints);
+        }
+        let dist = 0;
+        for (let i = 0; i < measurePoints.length - 1; i++) {
+          dist += measurePoints[i].distanceTo(measurePoints[i+1]);
+        }
+        document.getElementById('measureOutput').innerText = `Distância: ${dist.toFixed(2)} metros`;
+      }
+    }
+
+    function startMeasureArea() {
+      alert('Clique nos vértices do talhão ou área para calcular m² e hectares.');
+    }
+
+    // Inicialização 3D (Three.js WebGL nativo)
+    function init3D() {
+      const container = document.getElementById('canvas3dContainer');
+      const width = container.clientWidth || window.innerWidth;
+      const height = container.clientHeight || (window.innerHeight - 65);
+
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x020617);
+
+      camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+      camera.position.set(0, 50, 100);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(width, height);
+      container.appendChild(renderer.domElement);
+
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+
+      // Luzes
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+      scene.add(ambientLight);
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+      dirLight.position.set(50, 100, 50);
+      scene.add(dirLight);
+
+      // Terreno demonstrativo (ou carrega flightConfig.model3d)
+      const geometry = new THREE.PlaneGeometry(100, 100, 32, 32);
+      // Relevo simples
+      const pos = geometry.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const vx = pos.getX(i);
+        const vy = pos.getY(i);
+        pos.setZ(i, Math.sin(vx * 0.1) * Math.cos(vy * 0.1) * 4);
+      }
+      geometry.computeVertexNormals();
+
+      const material = new THREE.MeshStandardMaterial({ 
+        color: 0x38bdf8, 
+        wireframe: true 
+      });
+      const terrain = new THREE.Mesh(geometry, material);
+      terrain.rotation.x = -Math.PI / 2;
+      scene.add(terrain);
+
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      window.addEventListener('resize', () => {
+        const w = container.clientWidth;
+        const h = container.clientHeight;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+      });
+
+      initialized3D = true;
+    }
+
+    function switchMode(mode) {
+      currentMode = mode;
+      const btn2D = document.getElementById('btn2D');
+      const btn3D = document.getElementById('btn3D');
+      const mapView = document.getElementById('mapView');
+      const model3DView = document.getElementById('model3DView');
+      const toolsPanel = document.getElementById('toolsPanel');
+
+      if (mode === '2D') {
+        btn2D.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 text-white transition flex items-center gap-1.5";
+        btn3D.className = "px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition flex items-center gap-1.5";
+        mapView.classList.remove('hidden');
+        model3DView.classList.add('hidden');
+        toolsPanel.classList.remove('hidden');
+        if (map) map.invalidateSize();
+      } else {
+        btn3D.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 text-white transition flex items-center gap-1.5";
+        btn2D.className = "px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition flex items-center gap-1.5";
+        mapView.classList.add('hidden');
+        model3DView.classList.remove('hidden');
+        toolsPanel.classList.add('hidden');
+        if (!initialized3D) init3D();
+      }
+    }
+
+    initMap();
+  </script>
+</body>
+</html>
