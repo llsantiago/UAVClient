@@ -134,30 +134,28 @@
     function initMap() {
       document.getElementById('viewTitle').innerText = flightConfig.title;
 
+      // Trava o zoom máximo no limite em que os tiles existem (zoom 19)
       map = L.map('mapView', {
         center: flightConfig.center,
         zoom: 17,
         minZoom: 12,
-        maxZoom: 21,
+        maxZoom: 19,
+        maxNativeZoom: 19,
         zoomControl: true
       });
 
-      // Camada Base Satélite de Alta Resolução (Esri)
+      // Camada Base Satélite de Alta Resolução (Esri) - 100% gratuita sem API Key
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Esri World Imagery',
-        maxZoom: 21
-      }).addTo(map);
-
-      // Rótulos / Cidades / Ruas de apoio
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png', {
-        maxZoom: 21,
-        opacity: 0.85
+        maxNativeZoom: 19,
+        maxZoom: 19
       }).addTo(map);
 
       // Camada de TILES OFICIAL GDAL2Tiles (XYZ Slippy Map em WGS84 Web Mercator)
       orthoLayer = L.tileLayer(flightConfig.tilesUrl, {
         minZoom: flightConfig.minZoom,
-        maxZoom: flightConfig.maxZoom,
+        maxNativeZoom: 19,
+        maxZoom: 19,
         opacity: 1,
         attribution: 'GeoDeploy Orthophoto'
       }).addTo(map);
