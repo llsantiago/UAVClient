@@ -31,11 +31,12 @@
     .leaflet-sbs-range {
       display: none !important;
     }
-    .custom-shot-icon {
-      background: #0ea5e9;
-      border: 2px solid #ffffff;
-      border-radius: 50%;
-      box-shadow: 0 0 6px rgba(0,0,0,0.5);
+    #loading3D {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 50;
     }
   </style>
 </head>
@@ -61,7 +62,7 @@
       <!-- Baixar Relatório Técnico Oficial PDF -->
       <a href="./report.pdf" target="_blank" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 transition flex items-center gap-1.5 shadow-sm" title="Baixar relatório técnico WebODM">
         <i class="fa-solid fa-file-pdf text-xs"></i>
-        <span class="hidden md:inline">Relatório Técnico</span>
+        <span class="hidden md:inline">Relatório PDF</span>
       </a>
 
       <!-- Botão Recentralizar -->
@@ -82,7 +83,7 @@
           <i class="fa-solid fa-map"></i> 2D Ortofoto
         </button>
         <button id="btn3D" onclick="switchMode('3D')" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition flex items-center gap-1.5">
-          <i class="fa-solid fa-cube"></i> 3D Terreno
+          <i class="fa-solid fa-cube"></i> 3D Modelo Real
         </button>
       </div>
     </div>
@@ -96,19 +97,47 @@
 
     <!-- Badges de Data da Comparação -->
     <div id="splitLabels" class="hidden absolute top-4 left-1/2 -translate-x-1/2 z-[400] flex items-center gap-6 pointer-events-none">
-      <div class="bg-slate-900/90 border border-slate-700 text-sky-300 px-3 py-1.5 rounded-full text-xs font-bold shadow-xl backdrop-blur">
+      <div class="bg-slate-900/90 border border-slate-700 text-sky-300 px-3.5 py-1.5 rounded-full text-xs font-bold shadow-xl backdrop-blur">
         ◀ ESQUERDA: Satélite Base
       </div>
-      <div class="bg-slate-900/90 border border-slate-700 text-emerald-300 px-3 py-1.5 rounded-full text-xs font-bold shadow-xl backdrop-blur">
+      <div class="bg-slate-900/90 border border-slate-700 text-emerald-300 px-3.5 py-1.5 rounded-full text-xs font-bold shadow-xl backdrop-blur">
         DIREITA: Ortofoto Drone (19/01/2025) ▶
       </div>
     </div>
 
-    <!-- Visualizador 3D (Three.js WebGL) -->
+    <!-- Visualizador 3D (Three.js WebGL com Relevo Real DSM) -->
     <div id="model3DView" class="hidden relative bg-slate-950 flex items-center justify-center">
       <div id="canvas3dContainer" class="w-full h-full"></div>
-      <div id="model3DNotice" class="absolute bottom-5 bg-slate-900/90 border border-slate-800 px-4 py-2 rounded-xl text-xs text-slate-300">
-        <i class="fa-solid fa-circle-info text-sky-400 mr-1.5"></i> Gire com botão esquerdo • Zoom com roda do mouse • Mova com botão direito
+      
+      <div id="loading3D" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 text-center space-y-3 shadow-2xl backdrop-blur">
+        <i class="fa-solid fa-spinner fa-spin text-2xl text-sky-400"></i>
+        <p class="text-xs text-slate-300 font-medium">Construindo Terreno Topográfico 3D...</p>
+      </div>
+
+      <!-- Barra de Controle 3D -->
+      <div id="controls3D" class="absolute top-4 right-4 bg-slate-900/90 border border-slate-800 backdrop-blur rounded-xl p-3 space-y-2 z-10 text-xs shadow-xl">
+        <div class="font-semibold text-slate-200 border-b border-slate-800 pb-1 flex items-center justify-between">
+          <span>Controles 3D</span>
+          <button onclick="reset3DCamera()" title="Resetar Câmera" class="text-sky-400 hover:text-sky-300">
+            <i class="fa-solid fa-rotate text-xs"></i>
+          </button>
+        </div>
+        <div class="flex items-center justify-between gap-3 text-slate-400">
+          <span>Exagero Vertical:</span>
+          <select id="selectExaggeration" onchange="updateExaggeration(parseFloat(this.value))" class="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200">
+            <option value="1.0" selected>1.0x (Real 1:1)</option>
+            <option value="1.5">1.5x (Realçado)</option>
+            <option value="2.0">2.0x (Destacado)</option>
+          </select>
+        </div>
+        <label class="flex items-center justify-between text-slate-400 cursor-pointer pt-1">
+          <span>Malha Wireframe:</span>
+          <input type="checkbox" id="checkWireframe" onchange="toggleWireframe(this.checked)" class="rounded border-slate-800 bg-slate-950 text-sky-500">
+        </label>
+      </div>
+
+      <div id="model3DNotice" class="absolute bottom-5 bg-slate-900/90 border border-slate-800 px-4 py-2 rounded-xl text-xs text-slate-300 shadow-xl backdrop-blur">
+        <i class="fa-solid fa-circle-info text-sky-400 mr-1.5"></i> Botão esquerdo: <b>Rotacionar 360°</b> • Roda do mouse: <b>Zoom</b> • Botão direito: <b>Mover</b>
       </div>
     </div>
 
@@ -147,7 +176,7 @@
       <div class="space-y-2 text-xs pt-1 border-t border-slate-800">
         <span class="text-[11px] font-semibold text-slate-400 uppercase">Camadas Ativas</span>
         <label class="flex items-center justify-between text-slate-300">
-          <span>Ortofotomosaico (Tiles)</span>
+          <span>Ortofotomosaico (Super-Zoom)</span>
           <input type="checkbox" id="layerOrtho" checked onchange="toggleOrtho(this.checked)" class="rounded border-slate-800 bg-slate-950 text-sky-500">
         </label>
         <div class="flex items-center justify-between text-slate-400 pt-0.5">
@@ -190,29 +219,27 @@
     let shotsLayer = null;
     let sideBySideControl = null;
     let splitActive = false;
-    let scene, camera, renderer, controls;
-    let initialized3D = false;
 
-    // Metadados OFICIAIS do Parque das Serras extraídos pelo GDAL2Tiles:
+    // Metadados do Parque das Serras
     const flightConfig = {
       title: "Parque das Serras",
       center: [-5.815377620610569, -35.20182543490636],
       bounds: [
-        [-5.816727450750732, -35.203260795376615], // Sudoeste [lat, lon]
-        [-5.814027790470407, -35.20039007443611]   // Nordeste [lat, lon]
+        [-5.816727450750732, -35.203260795376615],
+        [-5.814027790470407, -35.20039007443611]
       ],
       tilesUrl: "./tiles/{z}/{x}/{y}.png",
-      minZoom: 15,
-      maxZoom: 20
+      minZoom: 14,
+      maxNativeZoom: 20, // Nível máximo gravado nos tiles (resolução real de 5cm)
+      maxZoom: 23        // Permite super-zoom ultra aproximado sem tela cinza
     };
 
     function initMap() {
       map = L.map('mapView', {
         center: flightConfig.center,
         zoom: 18,
-        minZoom: 13,
-        maxZoom: 20,
-        maxNativeZoom: 20,
+        minZoom: 12,
+        maxZoom: flightConfig.maxZoom,
         zoomControl: true
       });
 
@@ -220,14 +247,14 @@
       satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Esri World Imagery',
         maxNativeZoom: 19,
-        maxZoom: 20
+        maxZoom: flightConfig.maxZoom
       }).addTo(map);
 
-      // Ortofoto Tiles GDAL
+      // Ortofoto Tiles GDAL com super-zoom liberado
       orthoLayer = L.tileLayer(flightConfig.tilesUrl, {
         minZoom: flightConfig.minZoom,
-        maxNativeZoom: 20,
-        maxZoom: 20,
+        maxNativeZoom: flightConfig.maxNativeZoom,
+        maxZoom: flightConfig.maxZoom,
         opacity: 1,
         attribution: 'WebODM Orthophoto'
       }).addTo(map);
@@ -241,9 +268,7 @@
         dashArray: "4, 6"
       }).addTo(map);
 
-      // Carregar 513 pontos de disparo das câmeras (shots.geojson)
       loadCameraShots();
-
       map.fitBounds(flightConfig.bounds, { padding: [40, 40] });
     }
 
@@ -367,8 +392,17 @@
       alert('Clique nos vértices da área para calcular metros quadrados e hectares.');
     }
 
-    // Inicialização 3D (Three.js WebGL)
-    function init3D() {
+    // =========================================================
+    // MOTOR 3D TOPOGRÁFICO REAL (THREE.JS + ELEVAÇÃO DSM + ORTOFOTO)
+    // =========================================================
+    let scene, camera, renderer, controls;
+    let terrainMesh = null;
+    let terrainGeometry = null;
+    let baseElevationValues = null;
+    let currentExaggeration = 1.0;
+    let initialized3D = false;
+
+    async function init3D() {
       const container = document.getElementById('canvas3dContainer');
       const width = container.clientWidth || window.innerWidth;
       const height = container.clientHeight || (window.innerHeight - 65);
@@ -376,31 +410,66 @@
       scene = new THREE.Scene();
       scene.background = new THREE.Color(0x020617);
 
-      camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-      camera.position.set(0, 50, 100);
+      camera = new THREE.PerspectiveCamera(45, width / height, 0.5, 2000);
+      camera.position.set(0, 90, 140);
 
-      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.setSize(width, height);
       container.appendChild(renderer.domElement);
 
       controls = new THREE.OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.maxPolarAngle = Math.PI / 2 - 0.02; // Não deixa ir para baixo do solo
 
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
+      // Luzes
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
       scene.add(ambientLight);
       const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
-      dirLight.position.set(50, 100, 50);
+      dirLight.position.set(80, 150, 80);
       scene.add(dirLight);
 
-      // Terreno 3D
-      const geometry = new THREE.PlaneGeometry(100, 100, 32, 32);
-      const material = new THREE.MeshStandardMaterial({ 
-        color: 0x38bdf8, 
-        wireframe: true 
-      });
-      const terrain = new THREE.Mesh(geometry, material);
-      terrain.rotation.x = -Math.PI / 2;
-      scene.add(terrain);
+      // Carregar Matriz de Elevação DSM + Textura Real
+      try {
+        const [elevRes, texture] = await Promise.all([
+          fetch('./elevation_3d.json').then(r => r.json()),
+          new Promise((resolve) => new THREE.TextureLoader().load('./texture_3d.jpg', resolve))
+        ]);
+
+        baseElevationValues = elevRes.values;
+        const rows = elevRes.rows; // 128
+        const cols = elevRes.cols; // 128
+
+        // Dimensões proporcionais (largura x profundidade real)
+        const planeWidth = 140;
+        const planeHeight = 140;
+
+        terrainGeometry = new THREE.PlaneGeometry(planeWidth, planeHeight, cols - 1, rows - 1);
+        applyElevation(currentExaggeration);
+
+        const material = new THREE.MeshStandardMaterial({
+          map: texture,
+          roughness: 0.85,
+          metalness: 0.05
+        });
+
+        terrainMesh = new THREE.Mesh(terrainGeometry, material);
+        terrainMesh.rotation.x = -Math.PI / 2; // Deita no plano horizontal
+        scene.add(terrainMesh);
+
+        // Grade de base sutil
+        const grid = new THREE.GridHelper(180, 18, 0x1e293b, 0x0f172a);
+        grid.position.y = -15;
+        scene.add(grid);
+
+        document.getElementById('loading3D').classList.add('hidden');
+      } catch (err) {
+        console.error('Erro ao construir relevo 3D:', err);
+        document.getElementById('loading3D').innerHTML = `
+          <div class="text-rose-400 text-xs">Erro ao carregar dados 3D: ${err.message}</div>
+        `;
+      }
 
       function animate() {
         requestAnimationFrame(animate);
@@ -418,6 +487,44 @@
       });
 
       initialized3D = true;
+    }
+
+    function applyElevation(exaggeration) {
+      if (!terrainGeometry || !baseElevationValues) return;
+      const pos = terrainGeometry.attributes.position;
+      const rows = baseElevationValues.length;
+      const cols = baseElevationValues[0].length;
+
+      let idx = 0;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          // No PlaneGeometry, Z é a altura antes de rotacionar
+          const h = baseElevationValues[r][c] * 0.45 * exaggeration;
+          pos.setZ(idx, h);
+          idx++;
+        }
+      }
+      pos.needsUpdate = true;
+      terrainGeometry.computeVertexNormals();
+    }
+
+    function updateExaggeration(val) {
+      currentExaggeration = val;
+      applyElevation(currentExaggeration);
+    }
+
+    function toggleWireframe(val) {
+      if (terrainMesh && terrainMesh.material) {
+        terrainMesh.material.wireframe = val;
+      }
+    }
+
+    function reset3DCamera() {
+      if (camera && controls) {
+        camera.position.set(0, 90, 140);
+        controls.target.set(0, 0, 0);
+        controls.update();
+      }
     }
 
     function switchMode(mode) {
