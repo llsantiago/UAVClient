@@ -11,10 +11,9 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <!-- Three.js para 3D / OBJ / GLTF -->
+  <!-- Three.js para 3D -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
 
   <style>
     #mapView, #model3DView {
@@ -28,17 +27,24 @@
   <!-- Header de Navegação -->
   <header class="h-[65px] border-b border-slate-800 bg-slate-900/80 backdrop-blur px-5 flex items-center justify-between z-30">
     <div class="flex items-center gap-3">
-      <a href="../" class="text-slate-400 hover:text-white transition p-2 rounded-lg bg-slate-800/60 border border-slate-700/60">
+      <a href="../" class="text-slate-400 hover:text-white transition p-2 rounded-lg bg-slate-800/60 border border-slate-700/60" title="Voltar ao início">
         <i class="fa-solid fa-arrow-left text-xs"></i>
       </a>
       <div>
         <h1 id="viewTitle" class="font-bold text-sm md:text-base text-white">Levantamento Aéreo</h1>
-        <p id="viewSubtitle" class="text-[11px] text-slate-400">Visualizador DroneDeploy • Hospedado no GitHub Pages</p>
+        <p id="viewSubtitle" class="text-[11px] text-slate-400">Coordenadas Reais • SIRGAS 2000 / UTM 25S & WGS84</p>
       </div>
     </div>
 
-    <!-- Seletor 2D / 3D -->
-    <div class="flex items-center gap-2">
+    <!-- Controles -->
+    <div class="flex items-center gap-3">
+      <!-- Botão Recentralizar -->
+      <button onclick="recenterFlight()" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-sky-600/20 hover:bg-sky-600 text-sky-400 hover:text-white border border-sky-500/30 transition flex items-center gap-2 shadow-lg shadow-sky-600/10">
+        <i class="fa-solid fa-location-crosshairs text-sm"></i>
+        <span>Recentralizar Voo</span>
+      </button>
+
+      <!-- Seletor 2D / 3D -->
       <div class="bg-slate-950 border border-slate-800 p-1 rounded-xl flex items-center gap-1">
         <button id="btn2D" onclick="switchMode('2D')" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 text-white transition flex items-center gap-1.5">
           <i class="fa-solid fa-map"></i> 2D Ortofoto
@@ -60,7 +66,7 @@
     <div id="model3DView" class="hidden relative bg-slate-950 flex items-center justify-center">
       <div id="canvas3dContainer" class="w-full h-full"></div>
       <div id="model3DNotice" class="absolute bottom-5 bg-slate-900/90 border border-slate-800 px-4 py-2 rounded-xl text-xs text-slate-300">
-        <i class="fa-solid fa-circle-info text-sky-400 mr-1.5"></i> Gire com o botão esquerdo • Zoom com a roda do mouse • Pan com o botão direito
+        <i class="fa-solid fa-circle-info text-sky-400 mr-1.5"></i> Gire com botão esquerdo • Zoom com roda do mouse • Mova com botão direito
       </div>
     </div>
 
@@ -68,7 +74,9 @@
     <div id="toolsPanel" class="absolute top-4 left-4 z-[400] bg-slate-900/90 border border-slate-800 backdrop-blur-md rounded-2xl p-4 w-72 shadow-xl space-y-4">
       <div class="flex items-center justify-between border-b border-slate-800 pb-2">
         <span class="text-xs font-bold text-slate-200 uppercase tracking-wider">Camadas & Medições</span>
-        <i class="fa-solid fa-ruler-combined text-sky-400 text-xs"></i>
+        <button onclick="recenterFlight()" title="Recentralizar no Voo" class="text-sky-400 hover:text-sky-300">
+          <i class="fa-solid fa-location-crosshairs text-xs"></i>
+        </button>
       </div>
 
       <div class="space-y-2 text-xs">
@@ -78,8 +86,12 @@
         </label>
         <div class="flex items-center justify-between text-slate-400 pt-1">
           <span>Opacidade:</span>
-          <input type="range" min="0" max="1" step="0.1" value="1" oninput="setOrthoOpacity(this.value)" class="w-24 accent-sky-500">
+          <input type="range" min="0" max="1" step="0.05" value="1" oninput="setOrthoOpacity(this.value)" class="w-24 accent-sky-500">
         </div>
+        <label class="flex items-center justify-between text-slate-300 pt-1">
+          <span>Área Delimitada</span>
+          <input type="checkbox" id="layerBounds" checked onchange="toggleBounds(this.checked)" class="rounded border-slate-800 bg-slate-950 text-sky-500">
+        </label>
       </div>
 
       <div class="pt-2 border-t border-slate-800 space-y-2">
@@ -102,69 +114,84 @@
     let currentMode = '2D';
     let map = null;
     let orthoLayer = null;
+    let boundsLayer = null;
     let scene, camera, renderer, controls;
     let initialized3D = false;
 
-    // Configurações do Voo (edite este config.json ou direto aqui)
+    // Coordenadas Reais extraídas do arquivo do projeto (EPSG:31985 -> WGS84)
     const flightConfig = {
-      title: "Levantamento Piloto",
-      center: [-15.793889, -47.882778],
-      zoom: 17,
-      tilesUrl: "./tiles/{z}/{x}/{y}.png",
-      orthoImage: "./orthophoto.jpg", // fallback se não tiver pasta de tiles
-      model3d: "./model.obj"
+      title: "Levantamento Adutora Compesa",
+      bounds: [
+        [-7.874612, -34.937963], // Sudoeste [lat, lon]
+        [-7.823158, -34.894958]  // Nordeste [lat, lon]
+      ],
+      center: [-7.848885, -34.916460], // Centro exato
+      orthoImage: "./orthophoto.jpg"
     };
 
     function initMap() {
       document.getElementById('viewTitle').innerText = flightConfig.title;
 
-      map = L.map('mapView').setView(flightConfig.center, flightConfig.zoom);
+      // Cria o mapa centrado com limite de zoom
+      map = L.map('mapView', {
+        maxZoom: 22,
+        zoomControl: true
+      });
 
-      // Camada Base Satélite
+      // Camada Satélite Esri
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        attribution: 'Esri Satellite Tiles',
+        attribution: 'Esri Satellite Imagery',
         maxZoom: 21
       }).addTo(map);
 
-      // Tenta carregar pasta de tiles ou fallback de imagem
-      orthoLayer = L.tileLayer(flightConfig.tilesUrl, {
-        maxZoom: 22,
-        opacity: 1
+      // Nomes de cidades, vias e referências
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png', {
+        maxZoom: 21,
+        opacity: 0.85
       }).addTo(map);
 
-      orthoLayer.on('tileerror', function() {
-        // Se ainda não existirem tiles geradas, carrega overlay de imagem
-        if (!map.hasLayer(orthoLayerFallback) && flightConfig.orthoImage) {
-          loadFallbackImage();
-        }
+      // Ortofoto georreferenciada no local exato do GPS
+      orthoLayer = L.imageOverlay(flightConfig.orthoImage, flightConfig.bounds, {
+        opacity: 1,
+        interactive: true
+      }).addTo(map);
+
+      // Retângulo indicativo do perímetro mapeado
+      boundsLayer = L.rectangle(flightConfig.bounds, {
+        color: "#0ea5e9",
+        weight: 2,
+        fillColor: "#0ea5e9",
+        fillOpacity: 0.04,
+        dashArray: "4, 6"
+      }).addTo(map);
+
+      // Enquadra a tela diretamente no voo ao abrir
+      map.fitBounds(flightConfig.bounds, { padding: [40, 40] });
+    }
+
+    // Função de Recentralizar
+    function recenterFlight() {
+      if (!map) return;
+      map.flyToBounds(flightConfig.bounds, {
+        padding: [40, 40],
+        duration: 1.2
       });
     }
 
-    let orthoLayerFallback = null;
-    function loadFallbackImage() {
-      const bounds = [
-        [flightConfig.center[0] - 0.003, flightConfig.center[1] - 0.003],
-        [flightConfig.center[0] + 0.003, flightConfig.center[1] + 0.003]
-      ];
-      orthoLayerFallback = L.imageOverlay(flightConfig.orthoImage, bounds, { opacity: 0.95 }).addTo(map);
-      map.fitBounds(bounds);
+    function toggleOrtho(visible) {
+      if (!orthoLayer) return;
+      if (visible) map.addLayer(orthoLayer);
+      else map.removeLayer(orthoLayer);
     }
 
-    function toggleOrtho(visible) {
-      if (orthoLayer) {
-        if (visible) map.addLayer(orthoLayer);
-        else map.removeLayer(orthoLayer);
-      }
-      if (orthoLayerFallback) {
-        if (visible) map.addLayer(orthoLayerFallback);
-        else map.removeLayer(orthoLayerFallback);
-      }
+    function toggleBounds(visible) {
+      if (!boundsLayer) return;
+      if (visible) map.addLayer(boundsLayer);
+      else map.removeLayer(boundsLayer);
     }
 
     function setOrthoOpacity(val) {
-      const op = parseFloat(val);
-      if (orthoLayer && orthoLayer.setOpacity) orthoLayer.setOpacity(op);
-      if (orthoLayerFallback && orthoLayerFallback.setOpacity) orthoLayerFallback.setOpacity(op);
+      if (orthoLayer) orthoLayer.setOpacity(parseFloat(val));
     }
 
     // Ferramentas de Medição
@@ -196,10 +223,10 @@
     }
 
     function startMeasureArea() {
-      alert('Clique nos vértices do talhão ou área para calcular m² e hectares.');
+      alert('Clique nos vértices da área para calcular metros quadrados e hectares.');
     }
 
-    // Inicialização 3D (Three.js WebGL nativo)
+    // Inicialização 3D
     function init3D() {
       const container = document.getElementById('canvas3dContainer');
       const width = container.clientWidth || window.innerWidth;
@@ -218,31 +245,23 @@
       controls = new THREE.OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
 
-      // Luzes
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
       scene.add(ambientLight);
       const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
       dirLight.position.set(50, 100, 50);
       scene.add(dirLight);
 
-      // Terreno demonstrativo (ou carrega flightConfig.model3d)
-      const geometry = new THREE.PlaneGeometry(100, 100, 32, 32);
-      // Relevo simples
-      const pos = geometry.attributes.position;
-      for (let i = 0; i < pos.count; i++) {
-        const vx = pos.getX(i);
-        const vy = pos.getY(i);
-        pos.setZ(i, Math.sin(vx * 0.1) * Math.cos(vy * 0.1) * 4);
-      }
-      geometry.computeVertexNormals();
-
-      const material = new THREE.MeshStandardMaterial({ 
-        color: 0x38bdf8, 
-        wireframe: true 
+      const textureLoader = new THREE.TextureLoader();
+      textureLoader.load(flightConfig.orthoImage, function(texture) {
+        const geometry = new THREE.PlaneGeometry(100, 100, 64, 64);
+        const material = new THREE.MeshStandardMaterial({ 
+          map: texture,
+          roughness: 0.8
+        });
+        const terrain = new THREE.Mesh(geometry, material);
+        terrain.rotation.x = -Math.PI / 2;
+        scene.add(terrain);
       });
-      const terrain = new THREE.Mesh(geometry, material);
-      terrain.rotation.x = -Math.PI / 2;
-      scene.add(terrain);
 
       function animate() {
         requestAnimationFrame(animate);
