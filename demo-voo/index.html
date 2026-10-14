@@ -32,7 +32,7 @@
       </a>
       <div>
         <h1 id="viewTitle" class="font-bold text-sm md:text-base text-white">Levantamento Aéreo</h1>
-        <p id="viewSubtitle" class="text-[11px] text-slate-400">Coordenadas Reais • SIRGAS 2000 / UTM 25S & WGS84</p>
+        <p id="viewSubtitle" class="text-[11px] text-slate-400">Coordenadas Reais • WGS84 Pseudo-Mercator EPSG:3857 (GDAL2Tiles)</p>
       </div>
     </div>
 
@@ -81,7 +81,7 @@
 
       <div class="space-y-2 text-xs">
         <label class="flex items-center justify-between text-slate-300">
-          <span>Ortofotomosaico</span>
+          <span>Ortofotomosaico (Tiles)</span>
           <input type="checkbox" id="layerOrtho" checked onchange="toggleOrtho(this.checked)" class="rounded border-slate-800 bg-slate-950 text-sky-500">
         </label>
         <div class="flex items-center justify-between text-slate-400 pt-1">
@@ -118,45 +118,51 @@
     let scene, camera, renderer, controls;
     let initialized3D = false;
 
-    // Coordenadas Reais extraídas do arquivo do projeto (EPSG:31985 -> WGS84)
+    // Coordenadas OFICIAIS e EXATAS extraídas pelo GDAL2Tiles diretamente da ORTOFOTO.tif:
     const flightConfig = {
-      title: "Levantamento Adutora Compesa",
+      title: "Levantamento Ortofoto",
+      center: [-7.894143988583881, -34.83523053749287],
       bounds: [
-        [-7.874612, -34.937963], // Sudoeste [lat, lon]
-        [-7.823158, -34.894958]  // Nordeste [lat, lon]
+        [-7.897571809695426, -34.83840370418168], // Sudoeste [lat, lon]
+        [-7.890716167472335, -34.83205737080406]  // Nordeste [lat, lon]
       ],
-      center: [-7.848885, -34.916460], // Centro exato
-      orthoImage: "./orthophoto.jpg"
+      tilesUrl: "./tiles/{z}/{x}/{y}.png",
+      minZoom: 14,
+      maxZoom: 19
     };
 
     function initMap() {
       document.getElementById('viewTitle').innerText = flightConfig.title;
 
-      // Cria o mapa centrado com limite de zoom
       map = L.map('mapView', {
-        maxZoom: 22,
+        center: flightConfig.center,
+        zoom: 17,
+        minZoom: 12,
+        maxZoom: 21,
         zoomControl: true
       });
 
-      // Camada Satélite Esri
+      // Camada Base Satélite de Alta Resolução (Esri)
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        attribution: 'Esri Satellite Imagery',
+        attribution: 'Esri World Imagery',
         maxZoom: 21
       }).addTo(map);
 
-      // Nomes de cidades, vias e referências
+      // Rótulos / Cidades / Ruas de apoio
       L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png', {
         maxZoom: 21,
         opacity: 0.85
       }).addTo(map);
 
-      // Ortofoto georreferenciada no local exato do GPS
-      orthoLayer = L.imageOverlay(flightConfig.orthoImage, flightConfig.bounds, {
+      // Camada de TILES OFICIAL GDAL2Tiles (XYZ Slippy Map em WGS84 Web Mercator)
+      orthoLayer = L.tileLayer(flightConfig.tilesUrl, {
+        minZoom: flightConfig.minZoom,
+        maxZoom: flightConfig.maxZoom,
         opacity: 1,
-        interactive: true
+        attribution: 'GeoDeploy Orthophoto'
       }).addTo(map);
 
-      // Retângulo indicativo do perímetro mapeado
+      // Perímetro do voo
       boundsLayer = L.rectangle(flightConfig.bounds, {
         color: "#0ea5e9",
         weight: 2,
@@ -251,17 +257,15 @@
       dirLight.position.set(50, 100, 50);
       scene.add(dirLight);
 
-      const textureLoader = new THREE.TextureLoader();
-      textureLoader.load(flightConfig.orthoImage, function(texture) {
-        const geometry = new THREE.PlaneGeometry(100, 100, 64, 64);
-        const material = new THREE.MeshStandardMaterial({ 
-          map: texture,
-          roughness: 0.8
-        });
-        const terrain = new THREE.Mesh(geometry, material);
-        terrain.rotation.x = -Math.PI / 2;
-        scene.add(terrain);
+      // Terreno 3D
+      const geometry = new THREE.PlaneGeometry(100, 100, 32, 32);
+      const material = new THREE.MeshStandardMaterial({ 
+        color: 0x38bdf8, 
+        wireframe: true 
       });
+      const terrain = new THREE.Mesh(geometry, material);
+      terrain.rotation.x = -Math.PI / 2;
+      scene.add(terrain);
 
       function animate() {
         requestAnimationFrame(animate);
