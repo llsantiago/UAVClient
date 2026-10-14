@@ -3,13 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GeoDeploy | Visualizador de Voo</title>
+  <title>GeoDeploy | Visualizador e Comparador Temporal</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   
   <!-- Leaflet para 2D -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Leaflet Side-by-Side (Split Slider / Swipe) -->
+  <script src="https://cdn.jsdelivr.net/gh/digidem/leaflet-side-by-side@gh-pages/leaflet-side-by-side.min.js"></script>
 
   <!-- Three.js para 3D -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -19,6 +22,15 @@
     #mapView, #model3DView {
       height: calc(100vh - 65px);
       width: 100%;
+    }
+    /* Estilização da barra de Swipe Antes & Depois */
+    .leaflet-sbs-divider {
+      background-color: #0ea5e9 !important;
+      width: 4px !important;
+      box-shadow: 0 0 12px rgba(14, 165, 233, 0.8);
+    }
+    .leaflet-sbs-range {
+      display: none !important;
     }
   </style>
 </head>
@@ -32,16 +44,22 @@
       </a>
       <div>
         <h1 id="viewTitle" class="font-bold text-sm md:text-base text-white">Levantamento Aéreo</h1>
-        <p id="viewSubtitle" class="text-[11px] text-slate-400">Coordenadas Reais • WGS84 Pseudo-Mercator EPSG:3857 (GDAL2Tiles)</p>
+        <p id="viewSubtitle" class="text-[11px] text-slate-400">Acompanhamento Temporal de Obra • Coordenadas Reais</p>
       </div>
     </div>
 
-    <!-- Controles -->
-    <div class="flex items-center gap-3">
+    <!-- Controles Centrais / Direita -->
+    <div class="flex items-center gap-2.5">
       <!-- Botão Recentralizar -->
-      <button onclick="recenterFlight()" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-sky-600/20 hover:bg-sky-600 text-sky-400 hover:text-white border border-sky-500/30 transition flex items-center gap-2 shadow-lg shadow-sky-600/10">
-        <i class="fa-solid fa-location-crosshairs text-sm"></i>
-        <span>Recentralizar Voo</span>
+      <button onclick="recenterFlight()" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-sky-400 border border-slate-700 transition flex items-center gap-1.5 shadow-sm">
+        <i class="fa-solid fa-location-crosshairs text-xs"></i>
+        <span class="hidden sm:inline">Recentralizar</span>
+      </button>
+
+      <!-- Botão Comparador Slider (Antes & Depois) -->
+      <button id="btnSplit" onclick="toggleSplitMode()" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 transition flex items-center gap-1.5 shadow-sm">
+        <i class="fa-solid fa-arrows-split-up-and-left text-xs"></i>
+        <span>Comparar Datas (Swipe)</span>
       </button>
 
       <!-- Seletor 2D / 3D -->
@@ -62,6 +80,16 @@
     <!-- Visualizador 2D (Leaflet) -->
     <div id="mapView" class="relative"></div>
 
+    <!-- Badges de Data da Comparação (Visíveis apenas quando o modo Split está ativo) -->
+    <div id="splitLabels" class="hidden absolute top-4 left-1/2 -translate-x-1/2 z-[400] flex items-center gap-8 pointer-events-none">
+      <div class="bg-slate-900/90 border border-slate-700 text-sky-300 px-3.5 py-1.5 rounded-full text-xs font-bold shadow-xl backdrop-blur">
+        ◀ ESQUERDA: Data Anterior (Satélite)
+      </div>
+      <div class="bg-slate-900/90 border border-slate-700 text-emerald-300 px-3.5 py-1.5 rounded-full text-xs font-bold shadow-xl backdrop-blur">
+        DIREITA: Ortofoto Drone (Atual) ▶
+      </div>
+    </div>
+
     <!-- Visualizador 3D (Three.js WebGL) -->
     <div id="model3DView" class="hidden relative bg-slate-950 flex items-center justify-center">
       <div id="canvas3dContainer" class="w-full h-full"></div>
@@ -70,18 +98,28 @@
       </div>
     </div>
 
-    <!-- Painel Lateral Flutuante de Medições / Camadas -->
+    <!-- Painel Lateral Flutuante de Medições / Camadas / Linha do Tempo -->
     <div id="toolsPanel" class="absolute top-4 left-4 z-[400] bg-slate-900/90 border border-slate-800 backdrop-blur-md rounded-2xl p-4 w-72 shadow-xl space-y-4">
       <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-        <span class="text-xs font-bold text-slate-200 uppercase tracking-wider">Camadas & Medições</span>
+        <span class="text-xs font-bold text-slate-200 uppercase tracking-wider">Avanço & Camadas</span>
         <button onclick="recenterFlight()" title="Recentralizar no Voo" class="text-sky-400 hover:text-sky-300">
           <i class="fa-solid fa-location-crosshairs text-xs"></i>
         </button>
       </div>
 
-      <div class="space-y-2 text-xs">
+      <!-- Seletor de Datas de Voo (Linha do Tempo) -->
+      <div class="space-y-1.5 text-xs">
+        <label class="text-[11px] font-semibold text-slate-400 uppercase">Selecione o Voo / Data</label>
+        <select id="dateSelect" onchange="changeFlightDate(this.value)" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-slate-200 focus:outline-none focus:border-sky-500">
+          <option value="tiles">📅 Voo 01 - Outubro 2026 (Ortofoto Atual)</option>
+          <option value="tiles_data2">📅 Voo 02 - Novembro 2026 (Etapa Seguinte)</option>
+          <option value="base_satellite">🛰️ Imagem Base Anterior (Satélite)</option>
+        </select>
+      </div>
+
+      <div class="space-y-2 text-xs pt-1 border-t border-slate-800">
         <label class="flex items-center justify-between text-slate-300">
-          <span>Ortofotomosaico (Tiles)</span>
+          <span>Exibir Ortofoto</span>
           <input type="checkbox" id="layerOrtho" checked onchange="toggleOrtho(this.checked)" class="rounded border-slate-800 bg-slate-950 text-sky-500">
         </label>
         <div class="flex items-center justify-between text-slate-400 pt-1">
@@ -89,7 +127,7 @@
           <input type="range" min="0" max="1" step="0.05" value="1" oninput="setOrthoOpacity(this.value)" class="w-24 accent-sky-500">
         </div>
         <label class="flex items-center justify-between text-slate-300 pt-1">
-          <span>Área Delimitada</span>
+          <span>Perímetro do Voo</span>
           <input type="checkbox" id="layerBounds" checked onchange="toggleBounds(this.checked)" class="rounded border-slate-800 bg-slate-950 text-sky-500">
         </label>
       </div>
@@ -113,18 +151,21 @@
   <script>
     let currentMode = '2D';
     let map = null;
+    let satLayer = null;
     let orthoLayer = null;
     let boundsLayer = null;
+    let sideBySideControl = null;
+    let splitActive = false;
     let scene, camera, renderer, controls;
     let initialized3D = false;
 
-    // Coordenadas OFICIAIS e EXATAS extraídas pelo GDAL2Tiles diretamente da ORTOFOTO.tif:
+    // Metadados do Voo
     const flightConfig = {
-      title: "Levantamento Ortofoto",
+      title: "Levantamento Ortofoto & Avanço Temporal",
       center: [-7.894143988583881, -34.83523053749287],
       bounds: [
-        [-7.897571809695426, -34.83840370418168], // Sudoeste [lat, lon]
-        [-7.890716167472335, -34.83205737080406]  // Nordeste [lat, lon]
+        [-7.897571809695426, -34.83840370418168],
+        [-7.890716167472335, -34.83205737080406]
       ],
       tilesUrl: "./tiles/{z}/{x}/{y}.png",
       minZoom: 14,
@@ -134,7 +175,6 @@
     function initMap() {
       document.getElementById('viewTitle').innerText = flightConfig.title;
 
-      // Trava o zoom máximo no limite em que os tiles existem (zoom 19)
       map = L.map('mapView', {
         center: flightConfig.center,
         zoom: 17,
@@ -144,23 +184,23 @@
         zoomControl: true
       });
 
-      // Camada Base Satélite de Alta Resolução (Esri) - 100% gratuita sem API Key
-      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        attribution: 'Esri World Imagery',
+      // Camada Base Satélite (Esri)
+      satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Esri Satellite Imagery',
         maxNativeZoom: 19,
         maxZoom: 19
       }).addTo(map);
 
-      // Camada de TILES OFICIAL GDAL2Tiles (XYZ Slippy Map em WGS84 Web Mercator)
+      // Ortofoto Principal em Tiles GDAL
       orthoLayer = L.tileLayer(flightConfig.tilesUrl, {
         minZoom: flightConfig.minZoom,
         maxNativeZoom: 19,
         maxZoom: 19,
         opacity: 1,
-        attribution: 'GeoDeploy Orthophoto'
+        attribution: 'GeoDeploy'
       }).addTo(map);
 
-      // Perímetro do voo
+      // Perímetro
       boundsLayer = L.rectangle(flightConfig.bounds, {
         color: "#0ea5e9",
         weight: 2,
@@ -169,11 +209,55 @@
         dashArray: "4, 6"
       }).addTo(map);
 
-      // Enquadra a tela diretamente no voo ao abrir
       map.fitBounds(flightConfig.bounds, { padding: [40, 40] });
     }
 
-    // Função de Recentralizar
+    // Alternar o modo Split (Swipe Antes & Depois)
+    function toggleSplitMode() {
+      splitActive = !splitActive;
+      const btn = document.getElementById('btnSplit');
+      const labels = document.getElementById('splitLabels');
+
+      if (splitActive) {
+        btn.className = "px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 text-white border border-indigo-400 transition flex items-center gap-1.5 shadow-md shadow-indigo-600/30";
+        labels.classList.remove('hidden');
+
+        // Cria controle deslizante: Satélite à esquerda, Ortofoto do Drone à direita
+        sideBySideControl = L.control.sideBySide(satLayer, orthoLayer);
+        sideBySideControl.addTo(map);
+      } else {
+        btn.className = "px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 transition flex items-center gap-1.5 shadow-sm";
+        labels.classList.add('hidden');
+
+        if (sideBySideControl) {
+          map.removeControl(sideBySideControl);
+          sideBySideControl = null;
+        }
+      }
+    }
+
+    // Trocar de data / voo
+    function changeFlightDate(folder) {
+      if (folder === 'base_satellite') {
+        if (orthoLayer) map.removeLayer(orthoLayer);
+        return;
+      }
+      
+      const newUrl = `./${folder}/{z}/{x}/{y}.png`;
+      if (orthoLayer) map.removeLayer(orthoLayer);
+
+      orthoLayer = L.tileLayer(newUrl, {
+        minZoom: flightConfig.minZoom,
+        maxNativeZoom: 19,
+        maxZoom: 19,
+        opacity: 1
+      }).addTo(map);
+
+      if (splitActive && sideBySideControl) {
+        sideBySideControl.setRightLayers([orthoLayer]);
+      }
+    }
+
     function recenterFlight() {
       if (!map) return;
       map.flyToBounds(flightConfig.bounds, {
@@ -198,7 +282,7 @@
       if (orthoLayer) orthoLayer.setOpacity(parseFloat(val));
     }
 
-    // Ferramentas de Medição
+    // Medições
     let measurePoints = [];
     let measurePolyline = null;
     function startMeasureLine() {
@@ -255,7 +339,6 @@
       dirLight.position.set(50, 100, 50);
       scene.add(dirLight);
 
-      // Terreno 3D
       const geometry = new THREE.PlaneGeometry(100, 100, 32, 32);
       const material = new THREE.MeshStandardMaterial({ 
         color: 0x38bdf8, 
