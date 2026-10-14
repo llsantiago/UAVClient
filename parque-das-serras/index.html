@@ -1,20 +1,25 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GeoDeploy | Parque das Serras</title>
+  <title>GeoDeploy | Parque das Serras - Drone Intelligence</title>
+  
+  <!-- Tailwind CSS & Font Awesome -->
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   
-  <!-- Leaflet para 2D -->
+  <!-- Leaflet 2D Engine -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <!-- Leaflet Side-by-Side (Split Slider / Swipe) -->
+  <!-- Leaflet Side-by-Side (Swipe Slider) -->
   <script src="https://cdn.jsdelivr.net/gh/digidem/leaflet-side-by-side@gh-pages/leaflet-side-by-side.min.js"></script>
 
-  <!-- Three.js para 3D -->
+  <!-- Chart.js para Perfil Altimétrico (DroneDB Style) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Three.js para Relevo Topográfico 3D -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
@@ -31,91 +36,299 @@
     .leaflet-sbs-range {
       display: none !important;
     }
-    #loading3D {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 50;
+    .crosshair-cursor {
+      cursor: crosshair !important;
+    }
+    /* Estilização suave da barra de rolagem */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #090d16;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1e293b;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #334155;
     }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 flex flex-col h-screen overflow-hidden font-sans">
+<body class="bg-slate-950 text-slate-100 flex flex-col h-screen overflow-hidden font-sans select-none">
   
-  <!-- Header de Navegação -->
-  <header class="h-[65px] border-b border-slate-800 bg-slate-900/80 backdrop-blur px-5 flex items-center justify-between z-30">
+  <!-- Header de Navegação & Topbar -->
+  <header class="h-[65px] border-b border-slate-800 bg-slate-900/90 backdrop-blur-md px-4 md:px-6 flex items-center justify-between z-30 shrink-0">
+    <!-- Identificação do Projeto -->
     <div class="flex items-center gap-3">
-      <a href="../" class="text-slate-400 hover:text-white transition p-2 rounded-lg bg-slate-800/60 border border-slate-700/60" title="Voltar ao início">
+      <a href="../" class="text-slate-400 hover:text-white transition p-2 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 shadow-sm" title="Voltar ao portal principal">
         <i class="fa-solid fa-arrow-left text-xs"></i>
       </a>
       <div>
         <div class="flex items-center gap-2">
-          <h1 id="viewTitle" class="font-bold text-sm md:text-base text-white">Parque das Serras</h1>
-          <span class="text-[10px] bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2 py-0.5 rounded-full font-medium">5,03 ha • 513 fotos</span>
+          <h1 class="font-bold text-sm md:text-base text-white tracking-tight">Parque das Serras</h1>
+          <span class="text-[10px] bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2 py-0.5 rounded-full font-semibold font-mono">5,03 ha • 513 fotos</span>
+          <span class="hidden lg:inline text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-semibold font-mono">GSD ~5cm/px</span>
         </div>
-        <p id="viewSubtitle" class="text-[11px] text-slate-400">Levantamento Fotogramétrico WebODM • 19/01/2025</p>
+        <p class="text-[11px] text-slate-400 flex items-center gap-1.5">
+          <span>WebODM Survey • 19/01/2025</span>
+          <span class="text-slate-600">•</span>
+          <span class="text-sky-400/90 font-mono">EPSG:32725 (UTM 25S)</span>
+        </p>
       </div>
     </div>
 
-    <!-- Controles -->
-    <div class="flex items-center gap-2.5">
+    <!-- Ferramentas DroneDB & Ações Rápidas -->
+    <div class="flex items-center gap-2">
       <!-- Baixar Relatório Técnico Oficial PDF -->
-      <a href="./report.pdf" target="_blank" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 transition flex items-center gap-1.5 shadow-sm" title="Baixar relatório técnico WebODM">
+      <a href="./report.pdf" target="_blank" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 transition flex items-center gap-1.5 shadow-sm" title="Baixar relatório técnico de processamento WebODM">
         <i class="fa-solid fa-file-pdf text-xs"></i>
-        <span class="hidden md:inline">Relatório PDF</span>
+        <span class="hidden xl:inline">Relatório PDF</span>
       </a>
 
       <!-- Botão Recentralizar -->
-      <button onclick="recenterFlight()" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-sky-400 border border-slate-700 transition flex items-center gap-1.5 shadow-sm">
+      <button onclick="recenterFlight()" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-sky-400 border border-slate-700 transition flex items-center gap-1.5 shadow-sm" title="Recentralizar câmera no polígono do voo">
         <i class="fa-solid fa-location-crosshairs text-xs"></i>
-        <span class="hidden sm:inline">Recentralizar</span>
+        <span class="hidden md:inline">Enquadrar</span>
       </button>
 
       <!-- Botão Comparador Slider (Antes & Depois) -->
-      <button id="btnSplit" onclick="toggleSplitMode()" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 transition flex items-center gap-1.5 shadow-sm">
+      <button id="btnSplit" onclick="toggleSplitMode()" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 transition flex items-center gap-1.5 shadow-sm" title="Comparar ortofoto do drone com imagem de satélite prévia">
         <i class="fa-solid fa-arrows-split-up-and-left text-xs"></i>
-        <span>Swipe Satélite</span>
+        <span class="hidden sm:inline">Swipe Satélite</span>
       </button>
 
       <!-- Seletor 2D / 3D -->
-      <div class="bg-slate-950 border border-slate-800 p-1 rounded-xl flex items-center gap-1">
-        <button id="btn2D" onclick="switchMode('2D')" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 text-white transition flex items-center gap-1.5">
+      <div class="bg-slate-950 border border-slate-800 p-1 rounded-xl flex items-center gap-1 shadow-inner">
+        <button id="btn2D" onclick="switchMode('2D')" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 text-white transition flex items-center gap-1.5 shadow">
           <i class="fa-solid fa-map"></i> 2D Ortofoto
         </button>
         <button id="btn3D" onclick="switchMode('3D')" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition flex items-center gap-1.5">
-          <i class="fa-solid fa-cube"></i> 3D Modelo Real
+          <i class="fa-solid fa-cube"></i> 3D Terreno Real
         </button>
       </div>
     </div>
   </header>
 
-  <!-- Área Principal -->
+  <!-- Área Principal de Visualização -->
   <main class="flex-1 relative overflow-hidden">
     
     <!-- Visualizador 2D (Leaflet) -->
     <div id="mapView" class="relative"></div>
 
-    <!-- Badges de Data da Comparação -->
+    <!-- Badges de Data da Comparação (Swipe) -->
     <div id="splitLabels" class="hidden absolute top-4 left-1/2 -translate-x-1/2 z-[400] flex items-center gap-6 pointer-events-none">
-      <div class="bg-slate-900/90 border border-slate-700 text-sky-300 px-3.5 py-1.5 rounded-full text-xs font-bold shadow-xl backdrop-blur">
-        ◀ ESQUERDA: Satélite Base
+      <div class="bg-slate-900/95 border border-slate-700 text-sky-300 px-3.5 py-1.5 rounded-full text-xs font-bold shadow-2xl backdrop-blur">
+        ◀ Satélite de Base
       </div>
-      <div class="bg-slate-900/90 border border-slate-700 text-emerald-300 px-3.5 py-1.5 rounded-full text-xs font-bold shadow-xl backdrop-blur">
-        DIREITA: Ortofoto Drone (19/01/2025) ▶
+      <div class="bg-slate-900/95 border border-slate-700 text-emerald-300 px-3.5 py-1.5 rounded-full text-xs font-bold shadow-2xl backdrop-blur">
+        Ortofoto Drone (19/01/2025) ▶
       </div>
     </div>
 
-    <!-- Visualizador 3D (Three.js WebGL com Relevo Real DSM) -->
+    <!-- Indicador Ativo de Ferramenta (Toast de Instrução) -->
+    <div id="activeToolBanner" class="hidden absolute top-4 left-1/2 -translate-x-1/2 z-[450] bg-sky-950/95 border border-sky-500/50 text-sky-200 px-5 py-2.5 rounded-2xl text-xs font-semibold shadow-2xl backdrop-blur flex items-center gap-3">
+      <i id="activeToolIcon" class="fa-solid fa-chart-area text-sky-400 animate-pulse"></i>
+      <span id="activeToolText">Clique no mapa para traçar o perfil de elevação...</span>
+      <button onclick="cancelActiveTool()" class="ml-2 text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 px-2 py-0.5 rounded-md text-[11px] transition">
+        Cancelar (ESC)
+      </button>
+    </div>
+
+    <!-- HUD Altimétrico Ao Vivo (Cota sob o Cursor - DroneDB Style) -->
+    <div id="liveElevationBadge" class="absolute bottom-4 left-4 z-[400] bg-slate-900/90 border border-slate-800 backdrop-blur-md px-4 py-2 rounded-xl text-xs shadow-xl flex items-center gap-3 font-mono">
+      <div class="flex items-center gap-1.5 text-slate-400">
+        <i class="fa-solid fa-location-crosshairs text-sky-400 text-xs"></i>
+        <span id="hudCoords" class="text-slate-300 font-medium">Mova o cursor no mapa</span>
+      </div>
+      <div class="w-px h-3.5 bg-slate-700"></div>
+      <div class="flex items-center gap-1.5">
+        <span class="text-slate-400">Cota Z:</span>
+        <span id="hudElevation" class="text-sky-400 font-bold">-- m</span>
+      </div>
+    </div>
+
+    <!-- Painel Lateral de Ferramentas DroneDB & Camadas -->
+    <div id="toolsPanel" class="absolute top-4 left-4 z-[400] bg-slate-900/95 border border-slate-800 backdrop-blur-md rounded-2xl p-4 w-80 shadow-2xl space-y-4 max-h-[calc(100vh-140px)] overflow-y-auto">
+      
+      <!-- Cabeçalho do Painel -->
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-toolbox text-sky-400 text-xs"></i>
+          <span class="text-xs font-bold text-slate-200 uppercase tracking-wider">DroneDB Toolkit</span>
+        </div>
+        <button onclick="togglePanelCollapse()" class="text-slate-400 hover:text-slate-200 transition" title="Minimizar painel">
+          <i id="panelCollapseIcon" class="fa-solid fa-chevron-up text-xs"></i>
+        </button>
+      </div>
+
+      <div id="panelContent" class="space-y-4">
+        
+        <!-- Suíte Analítica DroneDB -->
+        <div class="space-y-2">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Análises de Precisão</span>
+          
+          <div class="grid grid-cols-2 gap-2">
+            <!-- Ferramenta Perfil Altimétrico -->
+            <button id="btnToolProfile" onclick="startElevationProfile()" class="bg-slate-800/90 hover:bg-slate-700 text-slate-200 p-2.5 rounded-xl text-xs flex flex-col items-center justify-center gap-1.5 border border-slate-700/80 transition hover:border-sky-500/50 group text-center shadow-sm">
+              <i class="fa-solid fa-chart-area text-sky-400 text-sm group-hover:scale-110 transition"></i>
+              <span class="font-medium text-[11px]">Perfil Altimétrico</span>
+            </button>
+
+            <!-- Ferramenta Cubagem de Volume -->
+            <button id="btnToolVolume" onclick="startVolumeMeasure()" class="bg-slate-800/90 hover:bg-slate-700 text-slate-200 p-2.5 rounded-xl text-xs flex flex-col items-center justify-center gap-1.5 border border-slate-700/80 transition hover:border-emerald-500/50 group text-center shadow-sm">
+              <i class="fa-solid fa-cubes-stacked text-emerald-400 text-sm group-hover:scale-110 transition"></i>
+              <span class="font-medium text-[11px]">Cubagem (Volume)</span>
+            </button>
+
+            <!-- Ferramenta Medir Distância -->
+            <button id="btnToolDist" onclick="startMeasureLine()" class="bg-slate-800/90 hover:bg-slate-700 text-slate-200 p-2 rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-700/80 transition hover:border-indigo-500/50">
+              <i class="fa-solid fa-ruler text-indigo-400"></i>
+              <span class="text-[11px]">Distância</span>
+            </button>
+
+            <!-- Ferramenta Anotação de Campo -->
+            <button id="btnToolNote" onclick="startFieldAnnotation()" class="bg-slate-800/90 hover:bg-slate-700 text-slate-200 p-2 rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-700/80 transition hover:border-amber-500/50">
+              <i class="fa-solid fa-note-sticky text-amber-400"></i>
+              <span class="text-[11px]">Anotação</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Card de Saída de Medição Dinâmica -->
+        <div id="measureOutputCard" class="hidden bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2 text-xs">
+          <div class="flex items-center justify-between text-slate-400">
+            <span id="measureCardTitle" class="font-semibold text-slate-300">Resultado da Medição</span>
+            <button onclick="clearCurrentMeasure()" class="text-rose-400 hover:text-rose-300 text-[11px]">Limpar</button>
+          </div>
+          <div id="measureCardContent" class="font-mono text-sky-400 text-xs"></div>
+        </div>
+
+        <!-- Camadas Ativas do Mapa -->
+        <div class="space-y-2 text-xs pt-2 border-t border-slate-800">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Camadas Cartográficas</span>
+          
+          <label class="flex items-center justify-between text-slate-300 cursor-pointer">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-map-location-dot text-sky-400 text-xs"></i>
+              <span>Ortofoto Super-Zoom (z23)</span>
+            </div>
+            <input type="checkbox" id="layerOrtho" checked onchange="toggleOrtho(this.checked)" class="rounded border-slate-800 bg-slate-950 text-sky-500 focus:ring-0">
+          </label>
+          
+          <div class="flex items-center justify-between text-slate-400 pl-5 pt-0.5">
+            <span class="text-[11px]">Opacidade:</span>
+            <input type="range" min="0" max="1" step="0.05" value="1" oninput="setOrthoOpacity(this.value)" class="w-24 accent-sky-500 h-1 bg-slate-800 rounded">
+          </div>
+          
+          <label class="flex items-center justify-between text-slate-300 cursor-pointer pt-1">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-camera text-sky-400 text-xs"></i>
+              <span>Posições das Fotos (513)</span>
+            </div>
+            <input type="checkbox" id="layerShots" checked onchange="toggleShots(this.checked)" class="rounded border-slate-800 bg-slate-950 text-sky-500 focus:ring-0">
+          </label>
+          
+          <label class="flex items-center justify-between text-slate-300 cursor-pointer pt-1">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-vector-square text-sky-400 text-xs"></i>
+              <span>Perímetro do Voo</span>
+            </div>
+            <input type="checkbox" id="layerBounds" checked onchange="toggleBounds(this.checked)" class="rounded border-slate-800 bg-slate-950 text-sky-500 focus:ring-0">
+          </label>
+
+          <label class="flex items-center justify-between text-slate-300 cursor-pointer pt-1">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-location-dot text-amber-400 text-xs"></i>
+              <span>Anotações de Campo (<span id="notesCount">0</span>)</span>
+            </div>
+            <input type="checkbox" id="layerNotes" checked onchange="toggleNotesLayer(this.checked)" class="rounded border-slate-800 bg-slate-950 text-sky-500 focus:ring-0">
+          </label>
+        </div>
+
+        <!-- Metadados de Engenharia WebODM -->
+        <div class="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 space-y-1.5 text-xs">
+          <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Métricas de Voo</div>
+          <div class="flex justify-between text-slate-400">
+            <span>Área Mapeada:</span>
+            <span class="text-slate-200 font-semibold font-mono">50.287 m² (5,03 ha)</span>
+          </div>
+          <div class="flex justify-between text-slate-400">
+            <span>Disparos:</span>
+            <span class="text-slate-200 font-semibold font-mono">513 fotos (DJI)</span>
+          </div>
+          <div class="flex justify-between text-slate-400">
+            <span>Altitude Relativa:</span>
+            <span class="text-slate-200 font-semibold font-mono">~74.5 metros</span>
+          </div>
+          <div class="flex justify-between text-slate-400">
+            <span>GSD Médio:</span>
+            <span class="text-emerald-400 font-semibold font-mono">~5.0 cm/pixel</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Drawer Inferior: Perfil Altimétrico com Chart.js (DroneDB Style) -->
+    <div id="elevationDrawer" class="hidden absolute bottom-0 left-0 right-0 z-[500] bg-slate-900/95 border-t border-slate-800 backdrop-blur-md p-4 transition-transform duration-300 shadow-2xl">
+      <div class="max-w-7xl mx-auto space-y-3">
+        
+        <!-- Cabeçalho do Perfil -->
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center">
+              <i class="fa-solid fa-chart-area text-sm"></i>
+            </div>
+            <div>
+              <h3 class="text-xs md:text-sm font-bold text-white">Perfil Altimétrico do Terreno (Corte A-B)</h3>
+              <p class="text-[11px] text-slate-400">Passe o mouse sobre o gráfico para rastrear a cota no mapa</p>
+            </div>
+          </div>
+
+          <!-- Métricas Resumidas -->
+          <div class="flex items-center gap-4 text-xs font-mono">
+            <div class="hidden sm:block text-right">
+              <div class="text-slate-400 text-[10px]">Extensão Total</div>
+              <div id="statProfileLength" class="text-slate-200 font-bold">-- m</div>
+            </div>
+            <div class="hidden md:block text-right">
+              <div class="text-slate-400 text-[10px]">Cota Mín / Máx</div>
+              <div id="statProfileMinMax" class="text-slate-200 font-bold">-- / -- m</div>
+            </div>
+            <div class="text-right">
+              <div class="text-slate-400 text-[10px]">Desnível (ΔZ)</div>
+              <div id="statProfileDelta" class="text-emerald-400 font-bold">-- m</div>
+            </div>
+            <div class="hidden lg:block text-right">
+              <div class="text-slate-400 text-[10px]">Inclinação Média</div>
+              <div id="statProfileSlope" class="text-amber-400 font-bold">-- %</div>
+            </div>
+            <button onclick="closeElevationDrawer()" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition ml-2">
+              <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Área do Canvas Chart.js -->
+        <div class="h-44 w-full">
+          <canvas id="profileChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Visualizador 3D (Three.js WebGL com Altimetria Real DSM) -->
     <div id="model3DView" class="hidden relative bg-slate-950 flex items-center justify-center">
       <div id="canvas3dContainer" class="w-full h-full"></div>
       
       <div id="loading3D" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 text-center space-y-3 shadow-2xl backdrop-blur">
         <i class="fa-solid fa-spinner fa-spin text-2xl text-sky-400"></i>
-        <p class="text-xs text-slate-300 font-medium">Construindo Terreno Topográfico 3D...</p>
+        <p class="text-xs text-slate-300 font-medium">Reconstruindo Terreno Topográfico 3D com DSM Real...</p>
       </div>
 
       <!-- Barra de Controle 3D -->
-      <div id="controls3D" class="absolute top-4 right-4 bg-slate-900/90 border border-slate-800 backdrop-blur rounded-xl p-3 space-y-2 z-10 text-xs shadow-xl">
+      <div id="controls3D" class="absolute top-4 right-4 bg-slate-900/90 border border-slate-800 backdrop-blur rounded-2xl p-3 space-y-2 z-10 text-xs shadow-xl">
         <div class="font-semibold text-slate-200 border-b border-slate-800 pb-1 flex items-center justify-between">
           <span>Controles 3D</span>
           <button onclick="reset3DCamera()" title="Resetar Câmera" class="text-sky-400 hover:text-sky-300">
@@ -137,129 +350,135 @@
       </div>
 
       <div id="model3DNotice" class="absolute bottom-5 bg-slate-900/90 border border-slate-800 px-4 py-2 rounded-xl text-xs text-slate-300 shadow-xl backdrop-blur">
-        <i class="fa-solid fa-circle-info text-sky-400 mr-1.5"></i> Botão esquerdo: <b>Rotacionar 360°</b> • Roda do mouse: <b>Zoom</b> • Botão direito: <b>Mover</b>
+        <i class="fa-solid fa-circle-info text-sky-400 mr-1.5"></i> Botão esquerdo: <b>Rotacionar 360°</b> • Roda do mouse: <b>Zoom</b> • Botão direito: <b>Pan / Arrastar</b>
       </div>
     </div>
 
-    <!-- Painel Lateral Flutuante de Medições / Camadas / Metadados -->
-    <div id="toolsPanel" class="absolute top-4 left-4 z-[400] bg-slate-900/90 border border-slate-800 backdrop-blur-md rounded-2xl p-4 w-80 shadow-xl space-y-4 max-h-[calc(100vh-100px)] overflow-y-auto">
-      
-      <!-- Cabeçalho do Painel -->
-      <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-        <span class="text-xs font-bold text-slate-200 uppercase tracking-wider">Camadas & Controle</span>
-        <button onclick="recenterFlight()" title="Recentralizar no Voo" class="text-sky-400 hover:text-sky-300">
-          <i class="fa-solid fa-location-crosshairs text-xs"></i>
-        </button>
-      </div>
-
-      <!-- Resumo do Voo WebODM -->
-      <div class="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 space-y-1.5 text-xs">
-        <div class="flex justify-between text-slate-400">
-          <span>Área Coberta:</span>
-          <span class="text-slate-200 font-semibold">50.287 m² (5,03 ha)</span>
-        </div>
-        <div class="flex justify-between text-slate-400">
-          <span>Fotos Capturadas:</span>
-          <span class="text-slate-200 font-semibold">513 disparos (DJI)</span>
-        </div>
-        <div class="flex justify-between text-slate-400">
-          <span>Data de Captura:</span>
-          <span class="text-slate-200 font-semibold">19/01/2025</span>
-        </div>
-        <div class="flex justify-between text-slate-400">
-          <span>GSD / Resolução:</span>
-          <span class="text-emerald-400 font-semibold">~5.0 cm/pixel</span>
-        </div>
-      </div>
-
-      <!-- Camadas do Mapa -->
-      <div class="space-y-2 text-xs pt-1 border-t border-slate-800">
-        <span class="text-[11px] font-semibold text-slate-400 uppercase">Camadas Ativas</span>
-        <label class="flex items-center justify-between text-slate-300">
-          <span>Ortofotomosaico (Super-Zoom)</span>
-          <input type="checkbox" id="layerOrtho" checked onchange="toggleOrtho(this.checked)" class="rounded border-slate-800 bg-slate-950 text-sky-500">
-        </label>
-        <div class="flex items-center justify-between text-slate-400 pt-0.5">
-          <span>Opacidade:</span>
-          <input type="range" min="0" max="1" step="0.05" value="1" oninput="setOrthoOpacity(this.value)" class="w-24 accent-sky-500">
-        </div>
-        <label class="flex items-center justify-between text-slate-300 pt-1">
-          <span>Posições das Fotos (513)</span>
-          <input type="checkbox" id="layerShots" checked onchange="toggleShots(this.checked)" class="rounded border-slate-800 bg-slate-950 text-sky-500">
-        </label>
-        <label class="flex items-center justify-between text-slate-300 pt-1">
-          <span>Perímetro do Voo</span>
-          <input type="checkbox" id="layerBounds" checked onchange="toggleBounds(this.checked)" class="rounded border-slate-800 bg-slate-950 text-sky-500">
-        </label>
-      </div>
-
-      <!-- Ferramentas de Medição -->
-      <div class="pt-2 border-t border-slate-800 space-y-2">
-        <span class="text-[11px] font-semibold text-slate-400 uppercase">Medições Interativas</span>
-        <div class="grid grid-cols-2 gap-2">
-          <button onclick="startMeasureLine()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2 rounded-lg text-xs flex items-center justify-center gap-1.5 border border-slate-700">
-            <i class="fa-solid fa-ruler"></i> Distância
-          </button>
-          <button onclick="startMeasureArea()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2 rounded-lg text-xs flex items-center justify-center gap-1.5 border border-slate-700">
-            <i class="fa-solid fa-draw-polygon"></i> Área
+    <!-- Modal para Criar Nova Anotação -->
+    <div id="modalAnnotation" class="hidden fixed inset-0 z-[600] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 max-w-md w-full space-y-4 shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-note-sticky text-amber-400 text-sm"></i>
+            <h3 class="text-sm font-bold text-white">Nova Anotação de Campo</h3>
+          </div>
+          <button onclick="closeAnnotationModal()" class="text-slate-400 hover:text-white">
+            <i class="fa-solid fa-xmark"></i>
           </button>
         </div>
-        <div id="measureOutput" class="text-[11px] text-sky-400 font-mono hidden bg-slate-950 p-2 rounded border border-slate-800"></div>
+
+        <div class="space-y-3 text-xs">
+          <!-- Cota Capturada -->
+          <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex justify-between font-mono">
+            <span class="text-slate-400">Coordenadas & Cota:</span>
+            <span id="modalAnnotCoords" class="text-sky-400 font-bold"></span>
+          </div>
+
+          <div>
+            <label class="block text-slate-300 mb-1 font-medium">Título do Ponto</label>
+            <input type="text" id="inputAnnotTitle" placeholder="Ex: Talude Norte, Pilha de Brita 02, Vala..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-sky-500">
+          </div>
+
+          <div>
+            <label class="block text-slate-300 mb-1 font-medium">Observações Técnicas</label>
+            <textarea id="inputAnnotDesc" rows="3" placeholder="Insira detalhes sobre o estado da obra, medição ou ocorrência..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-sky-500 resize-none"></textarea>
+          </div>
+
+          <div>
+            <label class="block text-slate-300 mb-1 font-medium">Categoria</label>
+            <select id="selectAnnotCat" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-sky-500">
+              <option value="info">Geral / Informativo (Azul)</option>
+              <option value="alert">Atenção / Inconformidade (Amarelo)</option>
+              <option value="work">Avanço de Obra / Executado (Verde)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+          <button onclick="closeAnnotationModal()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
+            Cancelar
+          </button>
+          <button onclick="saveAnnotation()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-sky-600 hover:bg-sky-500 text-white transition flex items-center gap-1.5 shadow">
+            <i class="fa-solid fa-floppy-disk text-xs"></i> Salvar Ponto
+          </button>
+        </div>
       </div>
     </div>
 
   </main>
 
   <script>
+    // =========================================================
+    // CONFIGURAÇÃO DO VOO & METADADOS GEORREFERENCIADOS
+    // =========================================================
+    const flightConfig = {
+      title: "Parque das Serras",
+      center: [-5.815377620610569, -35.20182543490636],
+      bounds: [
+        [-5.816727450750732, -35.203260795376615], // SW
+        [-5.814027790470407, -35.20039007443611]   // NE
+      ],
+      tilesUrl: "./tiles/{z}/{x}/{y}.png",
+      minZoom: 14,
+      maxNativeZoom: 20, // Nível gravado no disco
+      maxZoom: 23        // Super-Zoom ultra aproximado habilitado
+    };
+
     let currentMode = '2D';
     let map = null;
     let satLayer = null;
     let orthoLayer = null;
     let boundsLayer = null;
     let shotsLayer = null;
+    let notesLayer = null;
     let sideBySideControl = null;
     let splitActive = false;
 
-    // Metadados do Parque das Serras
-    const flightConfig = {
-      title: "Parque das Serras",
-      center: [-5.815377620610569, -35.20182543490636],
-      bounds: [
-        [-5.816727450750732, -35.203260795376615],
-        [-5.814027790470407, -35.20039007443611]
-      ],
-      tilesUrl: "./tiles/{z}/{x}/{y}.png",
-      minZoom: 14,
-      maxNativeZoom: 20, // Nível máximo gravado nos tiles (resolução real de 5cm)
-      maxZoom: 23        // Permite super-zoom ultra aproximado sem tela cinza
-    };
+    // Dados de Altimetria DSM carregados da matriz JSON
+    let elevationData = null; // { rows, cols, baseZ, values }
 
-    function initMap() {
+    // Estado das Ferramentas Interativas
+    let activeTool = null; // 'profile', 'volume', 'distance', 'annotation'
+    let toolPoints = [];
+    let toolTempLayer = null;
+    let profileHoverMarker = null;
+    let profileChartInstance = null;
+
+    // Cache local de anotações
+    let fieldAnnotations = [];
+
+    // =========================================================
+    // INICIALIZAÇÃO DO MAPA 2D (LEAFLET COM SUPER-ZOOM)
+    // =========================================================
+    async function initMap() {
       map = L.map('mapView', {
         center: flightConfig.center,
         zoom: 18,
         minZoom: 12,
         maxZoom: flightConfig.maxZoom,
-        zoomControl: true
+        zoomControl: false
       });
 
-      // Camada Satélite Esri
+      // Zoom Control posicionado no canto superior direito
+      L.control.zoom({ position: 'topright' }).addTo(map);
+
+      // Camada Satélite Esri World Imagery (Base histórica)
       satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Esri World Imagery',
         maxNativeZoom: 19,
         maxZoom: flightConfig.maxZoom
       }).addTo(map);
 
-      // Ortofoto Tiles GDAL com super-zoom liberado
+      // Ortofotomosaico GDAL em tiles XYZ com Super-Zoom liberado
       orthoLayer = L.tileLayer(flightConfig.tilesUrl, {
         minZoom: flightConfig.minZoom,
         maxNativeZoom: flightConfig.maxNativeZoom,
         maxZoom: flightConfig.maxZoom,
         opacity: 1,
-        attribution: 'WebODM Orthophoto'
+        attribution: 'WebODM Orthophoto (Parque das Serras)'
       }).addTo(map);
 
-      // Perímetro
+      // Perímetro do Levantamento
       boundsLayer = L.rectangle(flightConfig.bounds, {
         color: "#0ea5e9",
         weight: 2,
@@ -268,10 +487,689 @@
         dashArray: "4, 6"
       }).addTo(map);
 
+      // Grupo para Anotações de Campo
+      notesLayer = L.layerGroup().addTo(map);
+
+      // Carregar Matriz de Elevação DSM (98 KB) em paralelo
+      loadElevationMatrix();
+
+      // Carregar Posições das Câmeras (513)
       loadCameraShots();
+
+      // Carregar Anotações salvas no localStorage
+      loadSavedAnnotations();
+
+      // Eventos do Mapa
+      map.on('mousemove', onMapMouseMove);
+      map.on('click', onMapClick);
+
+      // Ajustar visualização ao perímetro
       map.fitBounds(flightConfig.bounds, { padding: [40, 40] });
+
+      // Tecla ESC cancela ferramenta ativa
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') cancelActiveTool();
+      });
     }
 
+    // =========================================================
+    // CONSULTA DE ELEVAÇÃO DSM REAL (INTERPOLAÇÃO BILINEAR)
+    // =========================================================
+    async function loadElevationMatrix() {
+      try {
+        const res = await fetch('./elevation_3d.json');
+        elevationData = await res.json();
+        console.log('Dados de elevação DSM carregados com sucesso. Base Z:', elevationData.baseZ);
+      } catch (err) {
+        console.warn('Não foi possível carregar elevation_3d.json:', err);
+      }
+    }
+
+    function getElevationAt(lat, lon) {
+      if (!elevationData) return null;
+      const north = flightConfig.bounds[1][0];
+      const south = flightConfig.bounds[0][0];
+      const west = flightConfig.bounds[0][1];
+      const east = flightConfig.bounds[1][1];
+
+      if (lat > north || lat < south || lon < west || lon > east) {
+        return null; // Fora do levantamento
+      }
+
+      const rRatio = (north - lat) / (north - south);
+      const cRatio = (lon - west) / (east - west);
+
+      const rFloat = rRatio * (elevationData.rows - 1);
+      const cFloat = cRatio * (elevationData.cols - 1);
+
+      const r0 = Math.floor(rFloat);
+      const r1 = Math.min(r0 + 1, elevationData.rows - 1);
+      const c0 = Math.floor(cFloat);
+      const c1 = Math.min(c0 + 1, elevationData.cols - 1);
+
+      const dr = rFloat - r0;
+      const dc = cFloat - c0;
+
+      const v00 = elevationData.values[r0][c0];
+      const v01 = elevationData.values[r0][c1];
+      const v10 = elevationData.values[r1][c0];
+      const v11 = elevationData.values[r1][c1];
+
+      // Interpolação Bilinear de alta precisão
+      const top = v00 * (1 - dc) + v01 * dc;
+      const bottom = v10 * (1 - dc) + v11 * dc;
+      const relativeZ = top * (1 - dr) + bottom * dr;
+
+      return elevationData.baseZ + relativeZ;
+    }
+
+    // =========================================================
+    // HUD ALTIMÉTRICO AO VIVO (MOVIMENTO DO MOUSE)
+    // =========================================================
+    let mouseThrottle = false;
+    function onMapMouseMove(e) {
+      if (mouseThrottle) return;
+      mouseThrottle = true;
+      requestAnimationFrame(() => {
+        const lat = e.latlng.lat;
+        const lon = e.latlng.lng;
+        document.getElementById('hudCoords').innerText = `${lat.toFixed(5)}°, ${lon.toFixed(5)}°`;
+
+        const elev = getElevationAt(lat, lon);
+        const hudElev = document.getElementById('hudElevation');
+        if (elev !== null) {
+          hudElev.innerText = `${elev.toFixed(2)} m`;
+          hudElev.className = "text-sky-400 font-bold";
+        } else {
+          hudElev.innerText = "Fora do Voo";
+          hudElev.className = "text-slate-500 font-medium";
+        }
+        mouseThrottle = false;
+      });
+    }
+
+    // =========================================================
+    // GERENCIADOR DE FERRAMENTAS ANALÍTICAS (DRONEDB STYLE)
+    // =========================================================
+    function setToolBanner(text, iconClass) {
+      const banner = document.getElementById('activeToolBanner');
+      document.getElementById('activeToolText').innerText = text;
+      document.getElementById('activeToolIcon').className = `${iconClass} text-sky-400 animate-pulse`;
+      banner.classList.remove('hidden');
+      document.getElementById('mapView').classList.add('crosshair-cursor');
+    }
+
+    function cancelActiveTool() {
+      activeTool = null;
+      toolPoints = [];
+      if (toolTempLayer) {
+        map.removeLayer(toolTempLayer);
+        toolTempLayer = null;
+      }
+      document.getElementById('activeToolBanner').classList.add('hidden');
+      document.getElementById('mapView').classList.remove('crosshair-cursor');
+      resetToolButtonsStyle();
+    }
+
+    function resetToolButtonsStyle() {
+      ['btnToolProfile', 'btnToolVolume', 'btnToolDist', 'btnToolNote'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('ring-2', 'ring-sky-400', 'bg-sky-950/60');
+      });
+    }
+
+    // =========================================================
+    // 1. FERRAMENTA: PERFIL ALTIMÉTRICO INTERATIVO COM CHART.JS
+    // =========================================================
+    function startElevationProfile() {
+      cancelActiveTool();
+      activeTool = 'profile';
+      document.getElementById('btnToolProfile').classList.add('ring-2', 'ring-sky-400', 'bg-sky-950/60');
+      setToolBanner('Perfil Altimétrico: Clique no ponto de início (A) e depois no final (B)...', 'fa-solid fa-chart-area');
+    }
+
+    function handleProfileClick(latlng) {
+      toolPoints.push(latlng);
+
+      if (toolPoints.length === 1) {
+        // Marca Ponto A
+        toolTempLayer = L.layerGroup().addTo(map);
+        const markerA = L.circleMarker(latlng, {
+          radius: 6,
+          fillColor: "#0ea5e9",
+          color: "#ffffff",
+          weight: 2,
+          fillOpacity: 1
+        }).bindTooltip("A (Início)", { permanent: true, direction: "top", className: "bg-slate-900 text-sky-400 px-2 py-0.5 rounded text-[10px] font-bold border border-slate-700" });
+        toolTempLayer.addLayer(markerA);
+
+        setToolBanner('Ponto A definido. Clique no Ponto B para gerar o perfil de corte...', 'fa-solid fa-chart-area');
+      } else if (toolPoints.length === 2) {
+        // Marca Ponto B e Traça Perfil
+        const pA = toolPoints[0];
+        const pB = toolPoints[1];
+
+        const markerB = L.circleMarker(pB, {
+          radius: 6,
+          fillColor: "#10b981",
+          color: "#ffffff",
+          weight: 2,
+          fillOpacity: 1
+        }).bindTooltip("B (Fim)", { permanent: true, direction: "top", className: "bg-slate-900 text-emerald-400 px-2 py-0.5 rounded text-[10px] font-bold border border-slate-700" });
+        toolTempLayer.addLayer(markerB);
+
+        const line = L.polyline([pA, pB], {
+          color: "#0ea5e9",
+          weight: 4,
+          dashArray: "6, 8"
+        });
+        toolTempLayer.addLayer(line);
+
+        // Amostrar elevações e construir gráfico
+        generateElevationProfile(pA, pB);
+        cancelActiveTool();
+      }
+    }
+
+    function generateElevationProfile(pA, pB) {
+      const totalDist = pA.distanceTo(pB);
+      const steps = 60;
+      const distances = [];
+      const elevations = [];
+      const sampleCoords = [];
+
+      let minElev = Infinity;
+      let maxElev = -Infinity;
+
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const lat = pA.lat + t * (pB.lat - pA.lat);
+        const lon = pA.lng + t * (pB.lng - pA.lng);
+        const dist = t * totalDist;
+
+        let elev = getElevationAt(lat, lon);
+        if (elev === null) elev = elevationData ? elevationData.baseZ : 60;
+
+        distances.push(dist.toFixed(1));
+        elevations.push(parseFloat(elev.toFixed(2)));
+        sampleCoords.push([lat, lon]);
+
+        if (elev < minElev) minElev = elev;
+        if (elev > maxElev) maxElev = elev;
+      }
+
+      const deltaZ = elevations[elevations.length - 1] - elevations[0];
+      const avgSlope = ((Math.abs(deltaZ) / totalDist) * 100).toFixed(1);
+
+      // Atualizar métricas no Drawer
+      document.getElementById('statProfileLength').innerText = `${totalDist.toFixed(1)} m`;
+      document.getElementById('statProfileMinMax').innerText = `${minElev.toFixed(1)} / ${maxElev.toFixed(1)} m`;
+      document.getElementById('statProfileDelta').innerText = `${deltaZ >= 0 ? '+' : ''}${deltaZ.toFixed(2)} m`;
+      document.getElementById('statProfileSlope').innerText = `${avgSlope} %`;
+
+      // Exibir Drawer
+      const drawer = document.getElementById('elevationDrawer');
+      drawer.classList.remove('hidden');
+
+      // Desenhar / Atualizar Chart.js
+      renderProfileChart(distances, elevations, sampleCoords);
+    }
+
+    function renderProfileChart(distances, elevations, sampleCoords) {
+      const ctx = document.getElementById('profileChart').getContext('2d');
+      if (profileChartInstance) profileChartInstance.destroy();
+
+      // Gradiente suave para a área sob o perfil
+      const gradient = ctx.createLinearGradient(0, 0, 0, 160);
+      gradient.addColorStop(0, 'rgba(14, 165, 233, 0.45)');
+      gradient.addColorStop(1, 'rgba(14, 165, 233, 0.02)');
+
+      profileChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: distances,
+          datasets: [{
+            label: 'Cota Altimétrica (m)',
+            data: elevations,
+            borderColor: '#38bdf8',
+            borderWidth: 2.5,
+            fill: true,
+            backgroundColor: gradient,
+            tension: 0.25,
+            pointRadius: 0,
+            pointHoverRadius: 6,
+            pointHoverBackgroundColor: '#ffffff',
+            pointHoverBorderColor: '#0ea5e9',
+            pointHoverBorderWidth: 3
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: 'index',
+            intersect: false
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: '#090d16',
+              titleColor: '#94a3b8',
+              bodyColor: '#38bdf8',
+              titleFont: { size: 10, family: 'monospace' },
+              bodyFont: { size: 12, weight: 'bold', family: 'monospace' },
+              borderColor: '#1e293b',
+              borderWidth: 1,
+              padding: 10,
+              displayColors: false,
+              callbacks: {
+                title: (items) => `Distância: ${items[0].label} m`,
+                label: (item) => `Altimetria: ${item.formattedValue} m (Z)`
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: 'rgba(30, 41, 59, 0.5)' },
+              ticks: { color: '#64748b', font: { size: 10, family: 'monospace' }, maxTicksLimit: 10 },
+              title: { display: true, text: 'Distância Linear (metros)', color: '#64748b', font: { size: 10 } }
+            },
+            y: {
+              grid: { color: 'rgba(30, 41, 59, 0.5)' },
+              ticks: { color: '#64748b', font: { size: 10, family: 'monospace' } },
+              title: { display: true, text: 'Altitude / Cota (m)', color: '#64748b', font: { size: 10 } }
+            }
+          },
+          onHover: (event, activeElements) => {
+            if (activeElements.length > 0) {
+              const idx = activeElements[0].index;
+              const coords = sampleCoords[idx];
+              if (!profileHoverMarker) {
+                profileHoverMarker = L.circleMarker(coords, {
+                  radius: 7,
+                  fillColor: "#ef4444",
+                  color: "#ffffff",
+                  weight: 2,
+                  fillOpacity: 1
+                }).addTo(map);
+              } else {
+                profileHoverMarker.setLatLng(coords);
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function closeElevationDrawer() {
+      document.getElementById('elevationDrawer').classList.add('hidden');
+      if (profileHoverMarker) {
+        map.removeLayer(profileHoverMarker);
+        profileHoverMarker = null;
+      }
+      if (toolTempLayer) {
+        map.removeLayer(toolTempLayer);
+        toolTempLayer = null;
+      }
+    }
+
+    // =========================================================
+    // 2. FERRAMENTA: CUBAGEM DE VOLUME (PILHAS / CORTES)
+    // =========================================================
+    function startVolumeMeasure() {
+      cancelActiveTool();
+      activeTool = 'volume';
+      document.getElementById('btnToolVolume').classList.add('ring-2', 'ring-emerald-400', 'bg-emerald-950/60');
+      setToolBanner('Cubagem: Clique nos vértices ao redor da pilha/vala. Dê duplo clique para fechar e calcular.', 'fa-solid fa-cubes-stacked');
+    }
+
+    function handleVolumeClick(latlng) {
+      toolPoints.push(latlng);
+
+      if (!toolTempLayer) {
+        toolTempLayer = L.layerGroup().addTo(map);
+      }
+
+      // Desenha ponto
+      const marker = L.circleMarker(latlng, {
+        radius: 4,
+        fillColor: "#10b981",
+        color: "#ffffff",
+        weight: 1.5,
+        fillOpacity: 0.9
+      });
+      toolTempLayer.addLayer(marker);
+
+      // Atualiza linha/polígono provisório
+      if (toolPoints.length > 1) {
+        const polyline = L.polyline(toolPoints, { color: "#10b981", weight: 2, dashArray: "4, 4" });
+        toolTempLayer.addLayer(polyline);
+      }
+    }
+
+    function calculateVolume(polygonLatLngs) {
+      if (polygonLatLngs.length < 3) return;
+
+      // Calcular Área Planar Proporcional em m²
+      const lat0 = flightConfig.center[0];
+      const rad = Math.PI / 180;
+      const mPerLat = 111319.5;
+      const mPerLon = 111319.5 * Math.cos(lat0 * rad);
+
+      // Vértices em metros
+      const polyMeters = polygonLatLngs.map(p => [
+        (p.lat - lat0) * mPerLat,
+        (p.lng - flightConfig.center[1]) * mPerLon
+      ]);
+
+      // Área 2D via Shoelace formula
+      let area = 0;
+      for (let i = 0; i < polyMeters.length; i++) {
+        const j = (i + 1) % polyMeters.length;
+        area += polyMeters[i][0] * polyMeters[j][1] - polyMeters[j][0] * polyMeters[i][1];
+      }
+      area = Math.abs(area / 2);
+
+      // Cota de Referência Base = Média dos vértices do perímetro
+      let baseZSum = 0;
+      let validVertices = 0;
+      polygonLatLngs.forEach(p => {
+        const z = getElevationAt(p.lat, p.lng);
+        if (z !== null) {
+          baseZSum += z;
+          validVertices++;
+        }
+      });
+      const baseZ = validVertices > 0 ? (baseZSum / validVertices) : (elevationData ? elevationData.baseZ : 60);
+
+      // Grid Bounding Box para amostragem volumétrica
+      let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+      polygonLatLngs.forEach(p => {
+        if (p.lat < minLat) minLat = p.lat;
+        if (p.lat > maxLat) maxLat = p.lat;
+        if (p.lng < minLon) minLon = p.lng;
+        if (p.lng > maxLon) maxLon = p.lng;
+      });
+
+      const gridN = 35; // Resolução da malha
+      const dLat = (maxLat - minLat) / gridN;
+      const dLon = (maxLon - minLon) / gridN;
+      const cellArea = (dLat * mPerLat) * (dLon * mPerLon);
+
+      let cutVolume = 0;  // Escavação (Z < Base)
+      let fillVolume = 0; // Pilha/Aterro (Z > Base)
+
+      // Ray-casting Point-in-polygon
+      function isInside(lat, lon) {
+        let inside = false;
+        for (let i = 0, j = polygonLatLngs.length - 1; i < polygonLatLngs.length; j = i++) {
+          const xi = polygonLatLngs[i].lng, yi = polygonLatLngs[i].lat;
+          const xj = polygonLatLngs[j].lng, yj = polygonLatLngs[j].lat;
+          const intersect = ((yi > lat) !== (yj > lat)) && (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+          if (intersect) inside = !inside;
+        }
+        return inside;
+      }
+
+      for (let r = 0; r < gridN; r++) {
+        const lat = minLat + (r + 0.5) * dLat;
+        for (let c = 0; c < gridN; c++) {
+          const lon = minLon + (c + 0.5) * dLon;
+          if (isInside(lat, lon)) {
+            const z = getElevationAt(lat, lon);
+            if (z !== null) {
+              const diff = z - baseZ;
+              if (diff > 0) fillVolume += diff * cellArea;
+              else cutVolume += Math.abs(diff) * cellArea;
+            }
+          }
+        }
+      }
+
+      const netVolume = fillVolume - cutVolume;
+
+      // Desenhar polígono final no mapa
+      if (toolTempLayer) map.removeLayer(toolTempLayer);
+      toolTempLayer = L.polygon(polygonLatLngs, {
+        color: "#10b981",
+        weight: 3,
+        fillColor: "#10b981",
+        fillOpacity: 0.25
+      }).addTo(map);
+
+      // Exibir Card de Resultado de Volume
+      const outCard = document.getElementById('measureOutputCard');
+      document.getElementById('measureCardTitle').innerText = 'Estimativa Volumétrica (DroneDB)';
+      document.getElementById('measureCardContent').innerHTML = `
+        <div class="space-y-1.5 text-slate-300">
+          <div class="flex justify-between">
+            <span class="text-slate-400">Área da Base:</span>
+            <span class="font-bold text-white">${area.toFixed(1)} m² (${(area/10000).toFixed(3)} ha)</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-400">Plano de Referência (Z):</span>
+            <span class="font-bold text-sky-400">${baseZ.toFixed(2)} m</span>
+          </div>
+          <div class="border-t border-slate-800 pt-1 flex justify-between">
+            <span class="text-emerald-400">Pilha / Aterro (+):</span>
+            <span class="font-bold text-emerald-400">${fillVolume.toFixed(1)} m³</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-amber-400">Vala / Corte (-):</span>
+            <span class="font-bold text-amber-400">${cutVolume.toFixed(1)} m³</span>
+          </div>
+          <div class="border-t border-slate-800 pt-1 flex justify-between font-bold">
+            <span class="text-white">Balanço Líquido:</span>
+            <span class="${netVolume >= 0 ? 'text-emerald-300' : 'text-rose-400'}">${netVolume.toFixed(1)} m³</span>
+          </div>
+        </div>
+      `;
+      outCard.classList.remove('hidden');
+      cancelActiveTool();
+    }
+
+    // =========================================================
+    // 3. FERRAMENTA: MEDIÇÃO DE DISTÂNCIA
+    // =========================================================
+    function startMeasureLine() {
+      cancelActiveTool();
+      activeTool = 'distance';
+      document.getElementById('btnToolDist').classList.add('ring-2', 'ring-indigo-400', 'bg-indigo-950/60');
+      setToolBanner('Distância: Clique nos pontos para medir extensão linear contínua...', 'fa-solid fa-ruler');
+    }
+
+    function handleDistanceClick(latlng) {
+      toolPoints.push(latlng);
+      if (!toolTempLayer) {
+        toolTempLayer = L.layerGroup().addTo(map);
+      }
+
+      const marker = L.circleMarker(latlng, {
+        radius: 4,
+        fillColor: "#6366f1",
+        color: "#ffffff",
+        weight: 1.5,
+        fillOpacity: 0.9
+      });
+      toolTempLayer.addLayer(marker);
+
+      if (toolPoints.length > 1) {
+        const polyline = L.polyline(toolPoints, { color: "#6366f1", weight: 3 });
+        toolTempLayer.addLayer(polyline);
+
+        let total = 0;
+        for (let i = 0; i < toolPoints.length - 1; i++) {
+          total += toolPoints[i].distanceTo(toolPoints[i+1]);
+        }
+
+        const outCard = document.getElementById('measureOutputCard');
+        document.getElementById('measureCardTitle').innerText = 'Distância Linear';
+        document.getElementById('measureCardContent').innerHTML = `
+          <div class="text-sm font-bold text-indigo-400">${total.toFixed(2)} metros</div>
+          <div class="text-[11px] text-slate-400">${toolPoints.length} vértices medidos</div>
+        `;
+        outCard.classList.remove('hidden');
+      }
+    }
+
+    // =========================================================
+    // 4. FERRAMENTA: ANOTAÇÕES DE CAMPO COM COTA ALTIMÉTRICA
+    // =========================================================
+    let pendingAnnotLatLng = null;
+
+    function startFieldAnnotation() {
+      cancelActiveTool();
+      activeTool = 'annotation';
+      document.getElementById('btnToolNote').classList.add('ring-2', 'ring-amber-400', 'bg-amber-950/60');
+      setToolBanner('Anotação: Clique em qualquer ponto do terreno para fixar uma nota técnica...', 'fa-solid fa-note-sticky');
+    }
+
+    function handleAnnotationClick(latlng) {
+      pendingAnnotLatLng = latlng;
+      const elev = getElevationAt(latlng.lat, latlng.lng);
+      const elevStr = elev !== null ? `${elev.toFixed(2)} m` : 'N/D';
+
+      document.getElementById('modalAnnotCoords').innerText = `${latlng.lat.toFixed(5)}°, ${latlng.lng.toFixed(5)}° • Z: ${elevStr}`;
+      document.getElementById('inputAnnotTitle').value = '';
+      document.getElementById('inputAnnotDesc').value = '';
+      document.getElementById('modalAnnotation').classList.remove('hidden');
+      cancelActiveTool();
+    }
+
+    function closeAnnotationModal() {
+      document.getElementById('modalAnnotation').classList.add('hidden');
+      pendingAnnotLatLng = null;
+    }
+
+    function saveAnnotation() {
+      if (!pendingAnnotLatLng) return;
+      const title = document.getElementById('inputAnnotTitle').value.trim() || 'Ponto de Inspeção';
+      const desc = document.getElementById('inputAnnotDesc').value.trim();
+      const cat = document.getElementById('selectAnnotCat').value;
+      const elev = getElevationAt(pendingAnnotLatLng.lat, pendingAnnotLatLng.lng);
+
+      const note = {
+        id: Date.now(),
+        lat: pendingAnnotLatLng.lat,
+        lng: pendingAnnotLatLng.lng,
+        elevation: elev,
+        title,
+        desc,
+        cat,
+        createdAt: new Date().toLocaleDateString('pt-BR')
+      };
+
+      fieldAnnotations.push(note);
+      localStorage.setItem('uav_annotations_parque', JSON.stringify(fieldAnnotations));
+      renderAnnotationMarker(note);
+      updateNotesCount();
+      closeAnnotationModal();
+    }
+
+    function loadSavedAnnotations() {
+      try {
+        const saved = localStorage.getItem('uav_annotations_parque');
+        if (saved) {
+          fieldAnnotations = JSON.parse(saved);
+          fieldAnnotations.forEach(renderAnnotationMarker);
+          updateNotesCount();
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar anotações salvas:', e);
+      }
+    }
+
+    function renderAnnotationMarker(note) {
+      const colors = {
+        info: '#0ea5e9',
+        alert: '#f59e0b',
+        work: '#10b981'
+      };
+      const color = colors[note.cat] || '#0ea5e9';
+
+      const marker = L.circleMarker([note.lat, note.lng], {
+        radius: 7,
+        fillColor: color,
+        color: '#ffffff',
+        weight: 2,
+        fillOpacity: 1
+      });
+
+      const zStr = note.elevation !== null ? `${note.elevation.toFixed(2)} m` : 'N/D';
+
+      marker.bindPopup(`
+        <div class="text-xs font-sans space-y-1.5 p-1 text-slate-900 max-w-xs">
+          <div class="font-bold text-sm" style="color: ${color}">${note.title}</div>
+          <div class="text-[11px] text-slate-600 bg-slate-100 p-1.5 rounded font-mono">
+            <b>Cota:</b> ${zStr} • <b>Data:</b> ${note.createdAt}
+          </div>
+          ${note.desc ? `<div class="text-slate-700 text-xs">${note.desc}</div>` : ''}
+          <div class="pt-1 border-t border-slate-200 flex justify-end">
+            <button onclick="deleteAnnotation(${note.id})" class="text-rose-600 hover:text-rose-800 text-[10px] font-semibold">Excluir Ponto</button>
+          </div>
+        </div>
+      `);
+
+      notesLayer.addLayer(marker);
+      note._marker = marker;
+    }
+
+    function deleteAnnotation(id) {
+      const idx = fieldAnnotations.findIndex(n => n.id === id);
+      if (idx !== -1) {
+        const note = fieldAnnotations[idx];
+        if (note._marker) notesLayer.removeLayer(note._marker);
+        fieldAnnotations.splice(idx, 1);
+        localStorage.setItem('uav_annotations_parque', JSON.stringify(fieldAnnotations));
+        updateNotesCount();
+        map.closePopup();
+      }
+    }
+
+    function updateNotesCount() {
+      document.getElementById('notesCount').innerText = fieldAnnotations.length;
+    }
+
+    function toggleNotesLayer(visible) {
+      if (!notesLayer) return;
+      if (visible) map.addLayer(notesLayer);
+      else map.removeLayer(notesLayer);
+    }
+
+    // =========================================================
+    // DESPACHANTE DE CLIQUE NO MAPA
+    // =========================================================
+    function onMapClick(e) {
+      if (activeTool === 'profile') {
+        handleProfileClick(e.latlng);
+      } else if (activeTool === 'volume') {
+        handleVolumeClick(e.latlng);
+      } else if (activeTool === 'distance') {
+        handleDistanceClick(e.latlng);
+      } else if (activeTool === 'annotation') {
+        handleAnnotationClick(e.latlng);
+      }
+    }
+
+    // Duplo clique fecha polígono de volume
+    mapView.addEventListener('dblclick', (e) => {
+      if (activeTool === 'volume' && toolPoints.length >= 3) {
+        e.stopPropagation();
+        calculateVolume(toolPoints);
+      }
+    });
+
+    function clearCurrentMeasure() {
+      if (toolTempLayer) {
+        map.removeLayer(toolTempLayer);
+        toolTempLayer = null;
+      }
+      document.getElementById('measureOutputCard').classList.add('hidden');
+    }
+
+    // =========================================================
+    // FOTOS DAS CÂMERAS DJI (513 PONTOS GEOJSON)
+    // =========================================================
     async function loadCameraShots() {
       try {
         const res = await fetch('./shots.geojson');
@@ -294,9 +1192,12 @@
               const alt = props.translation && props.translation[2] ? props.translation[2].toFixed(1) + ' m' : 'N/D';
               layer.bindPopup(`
                 <div class="text-xs font-sans space-y-1 text-slate-900">
-                  <div class="font-bold text-sky-600">${props.filename || 'Foto'}</div>
+                  <div class="font-bold text-sky-600 flex items-center gap-1">
+                    <i class="fa-solid fa-camera"></i>
+                    <span>${props.filename || 'Foto'}</span>
+                  </div>
                   <div><b>Altitude de Voo:</b> ${alt}</div>
-                  <div><b>Câmera:</b> ${props.camera || 'DJI'}</div>
+                  <div><b>Câmera:</b> ${props.camera || 'DJI FC3582'}</div>
                 </div>
               `);
             }
@@ -308,6 +1209,9 @@
       }
     }
 
+    // =========================================================
+    // CONTROLES DE CAMADAS E MODO SPLIT (SWIPE SLIDER)
+    // =========================================================
     function toggleSplitMode() {
       splitActive = !splitActive;
       const btn = document.getElementById('btnSplit');
@@ -360,36 +1264,12 @@
       if (orthoLayer) orthoLayer.setOpacity(parseFloat(val));
     }
 
-    // Ferramentas de Medição
-    let measurePoints = [];
-    let measurePolyline = null;
-    function startMeasureLine() {
-      measurePoints = [];
-      if (measurePolyline) map.removeLayer(measurePolyline);
-      const out = document.getElementById('measureOutput');
-      out.classList.remove('hidden');
-      out.innerText = 'Clique no mapa para medir distância linear...';
-      map.on('click', onMeasureClick);
-    }
-
-    function onMeasureClick(e) {
-      measurePoints.push(e.latlng);
-      if (measurePoints.length > 1) {
-        if (!measurePolyline) {
-          measurePolyline = L.polyline(measurePoints, { color: '#0ea5e9', weight: 4 }).addTo(map);
-        } else {
-          measurePolyline.setLatLngs(measurePoints);
-        }
-        let dist = 0;
-        for (let i = 0; i < measurePoints.length - 1; i++) {
-          dist += measurePoints[i].distanceTo(measurePoints[i+1]);
-        }
-        document.getElementById('measureOutput').innerText = `Distância: ${dist.toFixed(2)} metros`;
-      }
-    }
-
-    function startMeasureArea() {
-      alert('Clique nos vértices da área para calcular metros quadrados e hectares.');
+    function togglePanelCollapse() {
+      const content = document.getElementById('panelContent');
+      const icon = document.getElementById('panelCollapseIcon');
+      content.classList.toggle('hidden');
+      icon.classList.toggle('fa-chevron-down');
+      icon.classList.toggle('fa-chevron-up');
     }
 
     // =========================================================
@@ -421,16 +1301,16 @@
       controls = new THREE.OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
       controls.dampingFactor = 0.05;
-      controls.maxPolarAngle = Math.PI / 2 - 0.02; // Não deixa ir para baixo do solo
+      controls.maxPolarAngle = Math.PI / 2 - 0.02;
 
       // Luzes
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.95);
       scene.add(ambientLight);
       const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
       dirLight.position.set(80, 150, 80);
       scene.add(dirLight);
 
-      // Carregar Matriz de Elevação DSM + Textura Real
+      // Carregar Elevação DSM e Textura da Ortofoto
       try {
         const [elevRes, texture] = await Promise.all([
           fetch('./elevation_3d.json').then(r => r.json()),
@@ -441,7 +1321,6 @@
         const rows = elevRes.rows; // 128
         const cols = elevRes.cols; // 128
 
-        // Dimensões proporcionais (largura x profundidade real)
         const planeWidth = 140;
         const planeHeight = 140;
 
@@ -455,7 +1334,7 @@
         });
 
         terrainMesh = new THREE.Mesh(terrainGeometry, material);
-        terrainMesh.rotation.x = -Math.PI / 2; // Deita no plano horizontal
+        terrainMesh.rotation.x = -Math.PI / 2;
         scene.add(terrainMesh);
 
         // Grade de base sutil
@@ -498,7 +1377,6 @@
       let idx = 0;
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-          // No PlaneGeometry, Z é a altura antes de rotacionar
           const h = baseElevationValues[r][c] * 0.45 * exaggeration;
           pos.setZ(idx, h);
           idx++;
@@ -527,6 +1405,9 @@
       }
     }
 
+    // =========================================================
+    // ALTERNAR MODOS 2D (LEAFLET) / 3D (THREE.JS)
+    // =========================================================
     function switchMode(mode) {
       currentMode = mode;
       const btn2D = document.getElementById('btn2D');
@@ -534,24 +1415,29 @@
       const mapView = document.getElementById('mapView');
       const model3DView = document.getElementById('model3DView');
       const toolsPanel = document.getElementById('toolsPanel');
+      const liveElev = document.getElementById('liveElevationBadge');
 
       if (mode === '2D') {
-        btn2D.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 text-white transition flex items-center gap-1.5";
+        btn2D.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 text-white transition flex items-center gap-1.5 shadow";
         btn3D.className = "px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition flex items-center gap-1.5";
         mapView.classList.remove('hidden');
         model3DView.classList.add('hidden');
         toolsPanel.classList.remove('hidden');
+        liveElev.classList.remove('hidden');
         if (map) map.invalidateSize();
       } else {
-        btn3D.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 text-white transition flex items-center gap-1.5";
+        btn3D.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 text-white transition flex items-center gap-1.5 shadow";
         btn2D.className = "px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition flex items-center gap-1.5";
         mapView.classList.add('hidden');
         model3DView.classList.remove('hidden');
         toolsPanel.classList.add('hidden');
+        liveElev.classList.add('hidden');
+        closeElevationDrawer();
         if (!initialized3D) init3D();
       }
     }
 
+    // Inicialização ao carregar
     initMap();
   </script>
 </body>
