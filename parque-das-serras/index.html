@@ -1,0 +1,451 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GeoDeploy | Parque das Serras</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  
+  <!-- Leaflet para 2D -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Leaflet Side-by-Side (Split Slider / Swipe) -->
+  <script src="https://cdn.jsdelivr.net/gh/digidem/leaflet-side-by-side@gh-pages/leaflet-side-by-side.min.js"></script>
+
+  <!-- Three.js para 3D -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <style>
+    #mapView, #model3DView {
+      height: calc(100vh - 65px);
+      width: 100%;
+    }
+    .leaflet-sbs-divider {
+      background-color: #0ea5e9 !important;
+      width: 4px !important;
+      box-shadow: 0 0 14px rgba(14, 165, 233, 0.9);
+    }
+    .leaflet-sbs-range {
+      display: none !important;
+    }
+    .custom-shot-icon {
+      background: #0ea5e9;
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      box-shadow: 0 0 6px rgba(0,0,0,0.5);
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 flex flex-col h-screen overflow-hidden font-sans">
+  
+  <!-- Header de Navegação -->
+  <header class="h-[65px] border-b border-slate-800 bg-slate-900/80 backdrop-blur px-5 flex items-center justify-between z-30">
+    <div class="flex items-center gap-3">
+      <a href="../" class="text-slate-400 hover:text-white transition p-2 rounded-lg bg-slate-800/60 border border-slate-700/60" title="Voltar ao início">
+        <i class="fa-solid fa-arrow-left text-xs"></i>
+      </a>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 id="viewTitle" class="font-bold text-sm md:text-base text-white">Parque das Serras</h1>
+          <span class="text-[10px] bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2 py-0.5 rounded-full font-medium">5,03 ha • 513 fotos</span>
+        </div>
+        <p id="viewSubtitle" class="text-[11px] text-slate-400">Levantamento Fotogramétrico WebODM • 19/01/2025</p>
+      </div>
+    </div>
+
+    <!-- Controles -->
+    <div class="flex items-center gap-2.5">
+      <!-- Baixar Relatório Técnico Oficial PDF -->
+      <a href="./report.pdf" target="_blank" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 transition flex items-center gap-1.5 shadow-sm" title="Baixar relatório técnico WebODM">
+        <i class="fa-solid fa-file-pdf text-xs"></i>
+        <span class="hidden md:inline">Relatório Técnico</span>
+      </a>
+
+      <!-- Botão Recentralizar -->
+      <button onclick="recenterFlight()" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-sky-400 border border-slate-700 transition flex items-center gap-1.5 shadow-sm">
+        <i class="fa-solid fa-location-crosshairs text-xs"></i>
+        <span class="hidden sm:inline">Recentralizar</span>
+      </button>
+
+      <!-- Botão Comparador Slider (Antes & Depois) -->
+      <button id="btnSplit" onclick="toggleSplitMode()" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 transition flex items-center gap-1.5 shadow-sm">
+        <i class="fa-solid fa-arrows-split-up-and-left text-xs"></i>
+        <span>Swipe Satélite</span>
+      </button>
+
+      <!-- Seletor 2D / 3D -->
+      <div class="bg-slate-950 border border-slate-800 p-1 rounded-xl flex items-center gap-1">
+        <button id="btn2D" onclick="switchMode('2D')" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 text-white transition flex items-center gap-1.5">
+          <i class="fa-solid fa-map"></i> 2D Ortofoto
+        </button>
+        <button id="btn3D" onclick="switchMode('3D')" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition flex items-center gap-1.5">
+          <i class="fa-solid fa-cube"></i> 3D Terreno
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Área Principal -->
+  <main class="flex-1 relative overflow-hidden">
+    
+    <!-- Visualizador 2D (Leaflet) -->
+    <div id="mapView" class="relative"></div>
+
+    <!-- Badges de Data da Comparação -->
+    <div id="splitLabels" class="hidden absolute top-4 left-1/2 -translate-x-1/2 z-[400] flex items-center gap-6 pointer-events-none">
+      <div class="bg-slate-900/90 border border-slate-700 text-sky-300 px-3 py-1.5 rounded-full text-xs font-bold shadow-xl backdrop-blur">
+        ◀ ESQUERDA: Satélite Base
+      </div>
+      <div class="bg-slate-900/90 border border-slate-700 text-emerald-300 px-3 py-1.5 rounded-full text-xs font-bold shadow-xl backdrop-blur">
+        DIREITA: Ortofoto Drone (19/01/2025) ▶
+      </div>
+    </div>
+
+    <!-- Visualizador 3D (Three.js WebGL) -->
+    <div id="model3DView" class="hidden relative bg-slate-950 flex items-center justify-center">
+      <div id="canvas3dContainer" class="w-full h-full"></div>
+      <div id="model3DNotice" class="absolute bottom-5 bg-slate-900/90 border border-slate-800 px-4 py-2 rounded-xl text-xs text-slate-300">
+        <i class="fa-solid fa-circle-info text-sky-400 mr-1.5"></i> Gire com botão esquerdo • Zoom com roda do mouse • Mova com botão direito
+      </div>
+    </div>
+
+    <!-- Painel Lateral Flutuante de Medições / Camadas / Metadados -->
+    <div id="toolsPanel" class="absolute top-4 left-4 z-[400] bg-slate-900/90 border border-slate-800 backdrop-blur-md rounded-2xl p-4 w-80 shadow-xl space-y-4 max-h-[calc(100vh-100px)] overflow-y-auto">
+      
+      <!-- Cabeçalho do Painel -->
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+        <span class="text-xs font-bold text-slate-200 uppercase tracking-wider">Camadas & Controle</span>
+        <button onclick="recenterFlight()" title="Recentralizar no Voo" class="text-sky-400 hover:text-sky-300">
+          <i class="fa-solid fa-location-crosshairs text-xs"></i>
+        </button>
+      </div>
+
+      <!-- Resumo do Voo WebODM -->
+      <div class="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 space-y-1.5 text-xs">
+        <div class="flex justify-between text-slate-400">
+          <span>Área Coberta:</span>
+          <span class="text-slate-200 font-semibold">50.287 m² (5,03 ha)</span>
+        </div>
+        <div class="flex justify-between text-slate-400">
+          <span>Fotos Capturadas:</span>
+          <span class="text-slate-200 font-semibold">513 disparos (DJI)</span>
+        </div>
+        <div class="flex justify-between text-slate-400">
+          <span>Data de Captura:</span>
+          <span class="text-slate-200 font-semibold">19/01/2025</span>
+        </div>
+        <div class="flex justify-between text-slate-400">
+          <span>GSD / Resolução:</span>
+          <span class="text-emerald-400 font-semibold">~5.0 cm/pixel</span>
+        </div>
+      </div>
+
+      <!-- Camadas do Mapa -->
+      <div class="space-y-2 text-xs pt-1 border-t border-slate-800">
+        <span class="text-[11px] font-semibold text-slate-400 uppercase">Camadas Ativas</span>
+        <label class="flex items-center justify-between text-slate-300">
+          <span>Ortofotomosaico (Tiles)</span>
+          <input type="checkbox" id="layerOrtho" checked onchange="toggleOrtho(this.checked)" class="rounded border-slate-800 bg-slate-950 text-sky-500">
+        </label>
+        <div class="flex items-center justify-between text-slate-400 pt-0.5">
+          <span>Opacidade:</span>
+          <input type="range" min="0" max="1" step="0.05" value="1" oninput="setOrthoOpacity(this.value)" class="w-24 accent-sky-500">
+        </div>
+        <label class="flex items-center justify-between text-slate-300 pt-1">
+          <span>Posições das Fotos (513)</span>
+          <input type="checkbox" id="layerShots" checked onchange="toggleShots(this.checked)" class="rounded border-slate-800 bg-slate-950 text-sky-500">
+        </label>
+        <label class="flex items-center justify-between text-slate-300 pt-1">
+          <span>Perímetro do Voo</span>
+          <input type="checkbox" id="layerBounds" checked onchange="toggleBounds(this.checked)" class="rounded border-slate-800 bg-slate-950 text-sky-500">
+        </label>
+      </div>
+
+      <!-- Ferramentas de Medição -->
+      <div class="pt-2 border-t border-slate-800 space-y-2">
+        <span class="text-[11px] font-semibold text-slate-400 uppercase">Medições Interativas</span>
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="startMeasureLine()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2 rounded-lg text-xs flex items-center justify-center gap-1.5 border border-slate-700">
+            <i class="fa-solid fa-ruler"></i> Distância
+          </button>
+          <button onclick="startMeasureArea()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2 rounded-lg text-xs flex items-center justify-center gap-1.5 border border-slate-700">
+            <i class="fa-solid fa-draw-polygon"></i> Área
+          </button>
+        </div>
+        <div id="measureOutput" class="text-[11px] text-sky-400 font-mono hidden bg-slate-950 p-2 rounded border border-slate-800"></div>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    let currentMode = '2D';
+    let map = null;
+    let satLayer = null;
+    let orthoLayer = null;
+    let boundsLayer = null;
+    let shotsLayer = null;
+    let sideBySideControl = null;
+    let splitActive = false;
+    let scene, camera, renderer, controls;
+    let initialized3D = false;
+
+    // Metadados OFICIAIS do Parque das Serras extraídos pelo GDAL2Tiles:
+    const flightConfig = {
+      title: "Parque das Serras",
+      center: [-5.815377620610569, -35.20182543490636],
+      bounds: [
+        [-5.816727450750732, -35.203260795376615], // Sudoeste [lat, lon]
+        [-5.814027790470407, -35.20039007443611]   // Nordeste [lat, lon]
+      ],
+      tilesUrl: "./tiles/{z}/{x}/{y}.png",
+      minZoom: 15,
+      maxZoom: 20
+    };
+
+    function initMap() {
+      map = L.map('mapView', {
+        center: flightConfig.center,
+        zoom: 18,
+        minZoom: 13,
+        maxZoom: 20,
+        maxNativeZoom: 20,
+        zoomControl: true
+      });
+
+      // Camada Satélite Esri
+      satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Esri World Imagery',
+        maxNativeZoom: 19,
+        maxZoom: 20
+      }).addTo(map);
+
+      // Ortofoto Tiles GDAL
+      orthoLayer = L.tileLayer(flightConfig.tilesUrl, {
+        minZoom: flightConfig.minZoom,
+        maxNativeZoom: 20,
+        maxZoom: 20,
+        opacity: 1,
+        attribution: 'WebODM Orthophoto'
+      }).addTo(map);
+
+      // Perímetro
+      boundsLayer = L.rectangle(flightConfig.bounds, {
+        color: "#0ea5e9",
+        weight: 2,
+        fillColor: "#0ea5e9",
+        fillOpacity: 0.04,
+        dashArray: "4, 6"
+      }).addTo(map);
+
+      // Carregar 513 pontos de disparo das câmeras (shots.geojson)
+      loadCameraShots();
+
+      map.fitBounds(flightConfig.bounds, { padding: [40, 40] });
+    }
+
+    async function loadCameraShots() {
+      try {
+        const res = await fetch('./shots.geojson');
+        const data = await res.json();
+        
+        shotsLayer = L.geoJSON(data, {
+          pointToLayer: function(feature, latlng) {
+            return L.circleMarker(latlng, {
+              radius: 4,
+              fillColor: "#38bdf8",
+              color: "#ffffff",
+              weight: 1.5,
+              opacity: 1,
+              fillOpacity: 0.85
+            });
+          },
+          onEachFeature: function(feature, layer) {
+            if (feature.properties) {
+              const props = feature.properties;
+              const alt = props.translation && props.translation[2] ? props.translation[2].toFixed(1) + ' m' : 'N/D';
+              layer.bindPopup(`
+                <div class="text-xs font-sans space-y-1 text-slate-900">
+                  <div class="font-bold text-sky-600">${props.filename || 'Foto'}</div>
+                  <div><b>Altitude de Voo:</b> ${alt}</div>
+                  <div><b>Câmera:</b> ${props.camera || 'DJI'}</div>
+                </div>
+              `);
+            }
+          }
+        }).addTo(map);
+
+      } catch (err) {
+        console.warn('Não foi possível carregar shots.geojson:', err);
+      }
+    }
+
+    function toggleSplitMode() {
+      splitActive = !splitActive;
+      const btn = document.getElementById('btnSplit');
+      const labels = document.getElementById('splitLabels');
+
+      if (splitActive) {
+        btn.className = "px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 text-white border border-indigo-400 transition flex items-center gap-1.5 shadow-md shadow-indigo-600/30";
+        labels.classList.remove('hidden');
+
+        sideBySideControl = L.control.sideBySide(satLayer, orthoLayer);
+        sideBySideControl.addTo(map);
+      } else {
+        btn.className = "px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 transition flex items-center gap-1.5 shadow-sm";
+        labels.classList.add('hidden');
+
+        if (sideBySideControl) {
+          map.removeControl(sideBySideControl);
+          sideBySideControl = null;
+        }
+      }
+    }
+
+    function recenterFlight() {
+      if (!map) return;
+      map.flyToBounds(flightConfig.bounds, {
+        padding: [40, 40],
+        duration: 1.2
+      });
+    }
+
+    function toggleOrtho(visible) {
+      if (!orthoLayer) return;
+      if (visible) map.addLayer(orthoLayer);
+      else map.removeLayer(orthoLayer);
+    }
+
+    function toggleShots(visible) {
+      if (!shotsLayer) return;
+      if (visible) map.addLayer(shotsLayer);
+      else map.removeLayer(shotsLayer);
+    }
+
+    function toggleBounds(visible) {
+      if (!boundsLayer) return;
+      if (visible) map.addLayer(boundsLayer);
+      else map.removeLayer(boundsLayer);
+    }
+
+    function setOrthoOpacity(val) {
+      if (orthoLayer) orthoLayer.setOpacity(parseFloat(val));
+    }
+
+    // Ferramentas de Medição
+    let measurePoints = [];
+    let measurePolyline = null;
+    function startMeasureLine() {
+      measurePoints = [];
+      if (measurePolyline) map.removeLayer(measurePolyline);
+      const out = document.getElementById('measureOutput');
+      out.classList.remove('hidden');
+      out.innerText = 'Clique no mapa para medir distância linear...';
+      map.on('click', onMeasureClick);
+    }
+
+    function onMeasureClick(e) {
+      measurePoints.push(e.latlng);
+      if (measurePoints.length > 1) {
+        if (!measurePolyline) {
+          measurePolyline = L.polyline(measurePoints, { color: '#0ea5e9', weight: 4 }).addTo(map);
+        } else {
+          measurePolyline.setLatLngs(measurePoints);
+        }
+        let dist = 0;
+        for (let i = 0; i < measurePoints.length - 1; i++) {
+          dist += measurePoints[i].distanceTo(measurePoints[i+1]);
+        }
+        document.getElementById('measureOutput').innerText = `Distância: ${dist.toFixed(2)} metros`;
+      }
+    }
+
+    function startMeasureArea() {
+      alert('Clique nos vértices da área para calcular metros quadrados e hectares.');
+    }
+
+    // Inicialização 3D (Three.js WebGL)
+    function init3D() {
+      const container = document.getElementById('canvas3dContainer');
+      const width = container.clientWidth || window.innerWidth;
+      const height = container.clientHeight || (window.innerHeight - 65);
+
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x020617);
+
+      camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+      camera.position.set(0, 50, 100);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(width, height);
+      container.appendChild(renderer.domElement);
+
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
+      scene.add(ambientLight);
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+      dirLight.position.set(50, 100, 50);
+      scene.add(dirLight);
+
+      // Terreno 3D
+      const geometry = new THREE.PlaneGeometry(100, 100, 32, 32);
+      const material = new THREE.MeshStandardMaterial({ 
+        color: 0x38bdf8, 
+        wireframe: true 
+      });
+      const terrain = new THREE.Mesh(geometry, material);
+      terrain.rotation.x = -Math.PI / 2;
+      scene.add(terrain);
+
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      window.addEventListener('resize', () => {
+        const w = container.clientWidth;
+        const h = container.clientHeight;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+      });
+
+      initialized3D = true;
+    }
+
+    function switchMode(mode) {
+      currentMode = mode;
+      const btn2D = document.getElementById('btn2D');
+      const btn3D = document.getElementById('btn3D');
+      const mapView = document.getElementById('mapView');
+      const model3DView = document.getElementById('model3DView');
+      const toolsPanel = document.getElementById('toolsPanel');
+
+      if (mode === '2D') {
+        btn2D.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 text-white transition flex items-center gap-1.5";
+        btn3D.className = "px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition flex items-center gap-1.5";
+        mapView.classList.remove('hidden');
+        model3DView.classList.add('hidden');
+        toolsPanel.classList.remove('hidden');
+        if (map) map.invalidateSize();
+      } else {
+        btn3D.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 text-white transition flex items-center gap-1.5";
+        btn2D.className = "px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition flex items-center gap-1.5";
+        mapView.classList.add('hidden');
+        model3DView.classList.remove('hidden');
+        toolsPanel.classList.add('hidden');
+        if (!initialized3D) init3D();
+      }
+    }
+
+    initMap();
+  </script>
+</body>
+</html>

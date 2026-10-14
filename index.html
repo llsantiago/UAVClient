@@ -17,7 +17,7 @@
       </div>
       <div>
         <h1 class="font-bold text-lg tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">GeoDeploy Portal</h1>
-        <p class="text-xs text-slate-400">Hospedado no GitHub Pages</p>
+        <p class="text-xs text-slate-400">Plataforma de Fotogrametria e Nuvem de Drones</p>
       </div>
     </div>
     <div>
@@ -30,34 +30,94 @@
   <!-- Main Container -->
   <main class="flex-1 max-w-6xl w-full mx-auto p-6 space-y-6">
     <div class="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6">
-      <h2 class="text-base font-semibold text-white mb-1">Catálogo de Projetos e Voos</h2>
-      <p class="text-xs text-slate-400 mb-6">Selecione um dos levantamentos abaixo para abrir o visualizador interativo 2D/3D com medições de área e distância.</p>
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h2 class="text-base font-semibold text-white">Catálogo de Projetos e Levantamentos</h2>
+          <p class="text-xs text-slate-400">Selecione um dos projetos abaixo para inspecionar ortofotos de alta resolução, medições e dados de voo.</p>
+        </div>
+      </div>
 
-      <div id="projectsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <!-- Card de Exemplo -->
-        <div class="bg-slate-950 border border-slate-800 hover:border-sky-500/50 rounded-xl p-5 transition group space-y-3">
+      <div id="projectsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-5">
+        
+        <!-- Card 1: Parque das Serras (Novo Projeto Real WebODM) -->
+        <div class="bg-slate-950 border border-slate-800 hover:border-sky-500/60 rounded-2xl p-6 transition group space-y-4 shadow-xl">
           <div class="flex items-center justify-between">
-            <span class="text-[10px] bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2 py-0.5 rounded-full font-medium">Ortofoto + 3D</span>
-            <i class="fa-solid fa-map-location-dot text-slate-500 group-hover:text-sky-400 transition"></i>
+            <span class="text-[11px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full font-medium flex items-center gap-1.5">
+              <i class="fa-solid fa-check"></i> Processado no WebODM
+            </span>
+            <span class="text-xs text-slate-500">19/01/2025</span>
           </div>
           <div>
-            <h3 class="text-sm font-semibold text-white group-hover:text-sky-300 transition">Levantamento Piloto (Demo)</h3>
-            <p class="text-xs text-slate-400 mt-1 line-clamp-2">Exemplo demonstrativo com visualização de mapa ortorretificado e ferramentas de medição.</p>
+            <h3 class="text-base font-semibold text-white group-hover:text-sky-400 transition">Parque das Serras</h3>
+            <p class="text-xs text-slate-400 mt-1.5 leading-relaxed">
+              Levantamento completo com 513 fotos de drone DJI. Ortofoto de altíssima precisão fatiada em tiles GDAL, trajetória de câmeras e relatório técnico oficial em PDF.
+            </p>
           </div>
-          <div class="pt-3 border-t border-slate-900 flex items-center justify-between">
-            <span class="text-[11px] text-slate-500">Mapeamento Aéreo</span>
-            <a href="demo-voo/" class="text-xs bg-sky-600 hover:bg-sky-500 text-white font-medium px-3 py-1.5 rounded-lg transition flex items-center gap-1.5">
+          <div class="grid grid-cols-3 gap-2 py-2 border-y border-slate-900 text-[11px] text-slate-400">
+            <div>
+              <span class="text-slate-500 block">Área:</span>
+              <span class="font-semibold text-slate-200">5,03 ha</span>
+            </div>
+            <div>
+              <span class="text-slate-500 block">Fotos:</span>
+              <span class="font-semibold text-slate-200">513 disparos</span>
+            </div>
+            <div>
+              <span class="text-slate-500 block">GSD:</span>
+              <span class="font-semibold text-emerald-400">~5.0 cm/px</span>
+            </div>
+          </div>
+          <div class="flex items-center justify-between pt-1">
+            <a href="parque-das-serras/report.pdf" target="_blank" class="text-xs text-slate-400 hover:text-white transition flex items-center gap-1.5">
+              <i class="fa-solid fa-file-pdf text-rose-400"></i> Relatório PDF
+            </a>
+            <a href="parque-das-serras/" class="text-xs bg-sky-600 hover:bg-sky-500 text-white font-semibold px-4 py-2 rounded-xl transition flex items-center gap-1.5 shadow-lg shadow-sky-600/20">
               <span>Abrir Voo</span>
               <i class="fa-solid fa-arrow-right text-[10px]"></i>
             </a>
           </div>
         </div>
+
+        <!-- Card 2: Levantamento Piloto / Obra Anterior -->
+        <div class="bg-slate-950 border border-slate-800 hover:border-sky-500/60 rounded-2xl p-6 transition group space-y-4 shadow-xl">
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2.5 py-0.5 rounded-full font-medium">Ortofoto + Swipe</span>
+            <span class="text-xs text-slate-500">Adutora / Norte</span>
+          </div>
+          <div>
+            <h3 class="text-base font-semibold text-white group-hover:text-sky-400 transition">Levantamento Piloto (Adutora)</h3>
+            <p class="text-xs text-slate-400 mt-1.5 leading-relaxed">
+              Mapeamento de infraestrutura georreferenciado com ferramentas de medição de distância e área, além do modo de comparação temporal Antes & Depois (Swipe).
+            </p>
+          </div>
+          <div class="grid grid-cols-3 gap-2 py-2 border-y border-slate-900 text-[11px] text-slate-400">
+            <div>
+              <span class="text-slate-500 block">Tipo:</span>
+              <span class="font-semibold text-slate-200">Faixa de Obra</span>
+            </div>
+            <div>
+              <span class="text-slate-500 block">Projeção:</span>
+              <span class="font-semibold text-slate-200">UTM 25S</span>
+            </div>
+            <div>
+              <span class="text-slate-500 block">Recursos:</span>
+              <span class="font-semibold text-indigo-400">Swipe 2D</span>
+            </div>
+          </div>
+          <div class="flex items-center justify-end pt-1">
+            <a href="demo-voo/" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-semibold px-4 py-2 rounded-xl border border-slate-700 transition flex items-center gap-1.5">
+              <span>Abrir Voo</span>
+              <i class="fa-solid fa-arrow-right text-[10px]"></i>
+            </a>
+          </div>
+        </div>
+
       </div>
     </div>
   </main>
 
   <footer class="border-t border-slate-800/60 py-4 text-center text-xs text-slate-500">
-    GeoDeploy Viewer • Hospedagem estática via GitHub Pages
+    GeoDeploy Portal • Hospedagem estática via GitHub Pages
   </footer>
 
 </body>
