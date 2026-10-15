@@ -154,7 +154,7 @@
     </div>
 
     <!-- Legenda Hipsométrica Flutuante (Escala de Profundidade DSM) -->
-    <div id="dsmLegendBadge" class="absolute bottom-4 right-4 z-[400] bg-slate-900/90 border border-slate-800 backdrop-blur-md p-3 rounded-2xl text-xs shadow-2xl flex flex-col gap-1.5 w-64">
+    <div id="dsmLegendBadge" class="hidden absolute bottom-4 right-4 z-[400] bg-slate-900/90 border border-slate-800 backdrop-blur-md p-3 rounded-2xl text-xs shadow-2xl flex flex-col gap-1.5 w-64">
       <div class="flex items-center justify-between text-[11px] font-bold text-slate-300">
         <div class="flex items-center gap-1.5">
           <i class="fa-solid fa-layer-group text-sky-400"></i>
@@ -251,7 +251,7 @@
               <i class="fa-solid fa-mountain-sun text-emerald-400 text-xs"></i>
               <span class="font-medium text-emerald-300">Mapa de Profundidades (DSM)</span>
             </div>
-            <input type="checkbox" id="layerDsm" checked onchange="toggleDsm(this.checked)" class="rounded border-slate-800 bg-slate-950 text-emerald-500 focus:ring-0">
+            <input type="checkbox" id="layerDsm" onchange="toggleDsm(this.checked)" class="rounded border-slate-800 bg-slate-950 text-emerald-500 focus:ring-0">
           </label>
 
           <div class="flex items-center justify-between text-slate-400 pl-5 pt-0.5">
@@ -264,7 +264,7 @@
               <i class="fa-solid fa-camera text-sky-400 text-xs"></i>
               <span>Posições das Fotos (513)</span>
             </div>
-            <input type="checkbox" id="layerShots" checked onchange="toggleShots(this.checked)" class="rounded border-slate-800 bg-slate-950 text-sky-500 focus:ring-0">
+            <input type="checkbox" id="layerShots" onchange="toggleShots(this.checked)" class="rounded border-slate-800 bg-slate-950 text-sky-500 focus:ring-0">
           </label>
           
           <label class="flex items-center justify-between text-slate-300 cursor-pointer pt-1">
@@ -272,7 +272,7 @@
               <i class="fa-solid fa-vector-square text-sky-400 text-xs"></i>
               <span>Perímetro do Voo</span>
             </div>
-            <input type="checkbox" id="layerBounds" checked onchange="toggleBounds(this.checked)" class="rounded border-slate-800 bg-slate-950 text-sky-500 focus:ring-0">
+            <input type="checkbox" id="layerBounds" onchange="toggleBounds(this.checked)" class="rounded border-slate-800 bg-slate-950 text-sky-500 focus:ring-0">
           </label>
 
           <label class="flex items-center justify-between text-slate-300 cursor-pointer pt-1">
@@ -280,7 +280,7 @@
               <i class="fa-solid fa-location-dot text-amber-400 text-xs"></i>
               <span>Anotações de Campo (<span id="notesCount">0</span>)</span>
             </div>
-            <input type="checkbox" id="layerNotes" checked onchange="toggleNotesLayer(this.checked)" class="rounded border-slate-800 bg-slate-950 text-sky-500 focus:ring-0">
+            <input type="checkbox" id="layerNotes" onchange="toggleNotesLayer(this.checked)" class="rounded border-slate-800 bg-slate-950 text-sky-500 focus:ring-0">
           </label>
         </div>
 
@@ -551,23 +551,23 @@
         attribution: 'WebODM Orthophoto (Parque das Serras)'
       }).addTo(map);
 
-      // 3. Camada do Mapa de Profundidades (DSM Hipsométrico 2048² com Hillshade)
+      // 3. Camada do Mapa de Profundidades (DSM Hipsométrico 2048² com Hillshade) - Desligada por padrão
       dsmLayer = L.imageOverlay(flightConfig.dsmOverlayUrl, flightConfig.bounds, {
         opacity: 0.75,
         interactive: false
-      }).addTo(map);
+      });
 
-      // 4. Perímetro do Levantamento
+      // 4. Perímetro do Levantamento - Desligado por padrão
       boundsLayer = L.rectangle(flightConfig.bounds, {
         color: "#0ea5e9",
         weight: 2,
         fillColor: "#0ea5e9",
         fillOpacity: 0.04,
         dashArray: "4, 6"
-      }).addTo(map);
+      });
 
-      // 5. Grupo para Anotações de Campo
-      notesLayer = L.layerGroup().addTo(map);
+      // 5. Grupo para Anotações de Campo - Desligado por padrão
+      notesLayer = L.layerGroup();
 
       // Carregar Matriz de Elevação DSM de Alta Densidade (512x512 Float32 = 1.0 MB)
       loadHighDensityElevation();
@@ -1147,6 +1147,11 @@
       localStorage.setItem('uav_annotations_parque', JSON.stringify(fieldAnnotations));
       renderAnnotationMarker(note);
       updateNotesCount();
+      if (notesLayer && !map.hasLayer(notesLayer)) {
+        map.addLayer(notesLayer);
+        const chk = document.getElementById('layerNotes');
+        if (chk) chk.checked = true;
+      }
       closeAnnotationModal();
     }
 
@@ -1285,7 +1290,10 @@
               `);
             }
           }
-        }).addTo(map);
+        });
+        if (document.getElementById('layerShots') && document.getElementById('layerShots').checked) {
+          shotsLayer.addTo(map);
+        }
 
       } catch (err) {
         console.warn('Não foi possível carregar shots.geojson:', err);
