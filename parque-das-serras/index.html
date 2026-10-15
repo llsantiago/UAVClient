@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GeoDeploy | Parque das Serras - Drone Intelligence</title>
+  <title>GeoDeploy | Parque das Serras - Alta Densidade DSM</title>
   
   <!-- Tailwind CSS & Font Awesome -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -54,6 +54,10 @@
     ::-webkit-scrollbar-thumb:hover {
       background: #334155;
     }
+    /* Barra de gradiente de elevação Turbo */
+    .turbo-gradient-bar {
+      background: linear-gradient(to right, #30123b, #4145ab, #4675ed, #39a2fc, #1bcfd4, #24eca6, #61fc4c, #a4fc3b, #d1e834, #f3c63a, #fe9b2d, #f36315, #d93806, #b01a02, #7a0402);
+    }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100 flex flex-col h-screen overflow-hidden font-sans select-none">
@@ -69,12 +73,12 @@
         <div class="flex items-center gap-2">
           <h1 class="font-bold text-sm md:text-base text-white tracking-tight">Parque das Serras</h1>
           <span class="text-[10px] bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2 py-0.5 rounded-full font-semibold font-mono">5,03 ha • 513 fotos</span>
-          <span class="hidden lg:inline text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-semibold font-mono">GSD ~5cm/px</span>
+          <span class="hidden lg:inline text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-semibold font-mono">DSM 512² (262k pts)</span>
         </div>
         <p class="text-[11px] text-slate-400 flex items-center gap-1.5">
           <span>WebODM Survey • 19/01/2025</span>
           <span class="text-slate-600">•</span>
-          <span class="text-sky-400/90 font-mono">EPSG:32725 (UTM 25S)</span>
+          <span class="text-sky-400/90 font-mono">GSD ~5cm • EPSG:32725</span>
         </p>
       </div>
     </div>
@@ -102,7 +106,7 @@
       <!-- Seletor 2D / 3D -->
       <div class="bg-slate-950 border border-slate-800 p-1 rounded-xl flex items-center gap-1 shadow-inner">
         <button id="btn2D" onclick="switchMode('2D')" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 text-white transition flex items-center gap-1.5 shadow">
-          <i class="fa-solid fa-map"></i> 2D Ortofoto
+          <i class="fa-solid fa-map"></i> 2D Ortofoto & DSM
         </button>
         <button id="btn3D" onclick="switchMode('3D')" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition flex items-center gap-1.5">
           <i class="fa-solid fa-cube"></i> 3D Terreno Real
@@ -146,6 +150,24 @@
       <div class="flex items-center gap-1.5">
         <span class="text-slate-400">Cota Z:</span>
         <span id="hudElevation" class="text-sky-400 font-bold">-- m</span>
+      </div>
+    </div>
+
+    <!-- Legenda Hipsométrica Flutuante (Escala de Profundidade DSM) -->
+    <div id="dsmLegendBadge" class="absolute bottom-4 right-4 z-[400] bg-slate-900/90 border border-slate-800 backdrop-blur-md p-3 rounded-2xl text-xs shadow-2xl flex flex-col gap-1.5 w-64">
+      <div class="flex items-center justify-between text-[11px] font-bold text-slate-300">
+        <div class="flex items-center gap-1.5">
+          <i class="fa-solid fa-layer-group text-sky-400"></i>
+          <span>Profundidade / Elevação DSM</span>
+        </div>
+        <span class="text-[10px] text-emerald-400 font-mono">512² HD</span>
+      </div>
+      <!-- Barra de gradiente de cor Turbo -->
+      <div class="h-3 w-full rounded-md turbo-gradient-bar shadow-inner border border-slate-700/60"></div>
+      <div class="flex justify-between text-[10px] font-mono text-slate-400">
+        <span>53.2 m (Mín)</span>
+        <span>63.6 m (Méd)</span>
+        <span>94.8 m (Máx)</span>
       </div>
     </div>
 
@@ -209,6 +231,7 @@
         <div class="space-y-2 text-xs pt-2 border-t border-slate-800">
           <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Camadas Cartográficas</span>
           
+          <!-- Ortofoto RGB -->
           <label class="flex items-center justify-between text-slate-300 cursor-pointer">
             <div class="flex items-center gap-2">
               <i class="fa-solid fa-map-location-dot text-sky-400 text-xs"></i>
@@ -218,8 +241,22 @@
           </label>
           
           <div class="flex items-center justify-between text-slate-400 pl-5 pt-0.5">
-            <span class="text-[11px]">Opacidade:</span>
+            <span class="text-[11px]">Opacidade Ortofoto:</span>
             <input type="range" min="0" max="1" step="0.05" value="1" oninput="setOrthoOpacity(this.value)" class="w-24 accent-sky-500 h-1 bg-slate-800 rounded">
+          </div>
+
+          <!-- Mapa de Profundidades / Elevação (DSM Hipsométrico com Hillshade) -->
+          <label class="flex items-center justify-between text-slate-300 cursor-pointer pt-1.5 border-t border-slate-800/60">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-mountain-sun text-emerald-400 text-xs"></i>
+              <span class="font-medium text-emerald-300">Mapa de Profundidades (DSM)</span>
+            </div>
+            <input type="checkbox" id="layerDsm" checked onchange="toggleDsm(this.checked)" class="rounded border-slate-800 bg-slate-950 text-emerald-500 focus:ring-0">
+          </label>
+
+          <div class="flex items-center justify-between text-slate-400 pl-5 pt-0.5">
+            <span class="text-[11px]">Opacidade DSM:</span>
+            <input type="range" min="0" max="1" step="0.05" value="0.75" oninput="setDsmOpacity(this.value)" class="w-24 accent-emerald-500 h-1 bg-slate-800 rounded">
           </div>
           
           <label class="flex items-center justify-between text-slate-300 cursor-pointer pt-1">
@@ -259,12 +296,12 @@
             <span class="text-slate-200 font-semibold font-mono">513 fotos (DJI)</span>
           </div>
           <div class="flex justify-between text-slate-400">
-            <span>Altitude Relativa:</span>
-            <span class="text-slate-200 font-semibold font-mono">~74.5 metros</span>
+            <span>Resolução DSM:</span>
+            <span class="text-emerald-400 font-semibold font-mono">262.144 pontos (512²)</span>
           </div>
           <div class="flex justify-between text-slate-400">
-            <span>GSD Médio:</span>
-            <span class="text-emerald-400 font-semibold font-mono">~5.0 cm/pixel</span>
+            <span>Precisão Horizontal:</span>
+            <span class="text-emerald-400 font-semibold font-mono">~58 cm / célula</span>
           </div>
         </div>
 
@@ -282,8 +319,8 @@
               <i class="fa-solid fa-chart-area text-sm"></i>
             </div>
             <div>
-              <h3 class="text-xs md:text-sm font-bold text-white">Perfil Altimétrico do Terreno (Corte A-B)</h3>
-              <p class="text-[11px] text-slate-400">Passe o mouse sobre o gráfico para rastrear a cota no mapa</p>
+              <h3 class="text-xs md:text-sm font-bold text-white">Perfil Altimétrico de Alta Densidade (Corte A-B)</h3>
+              <p class="text-[11px] text-slate-400">Passe o mouse sobre o gráfico para rastrear a cota no mapa com precisão de 58cm</p>
             </div>
           </div>
 
@@ -318,32 +355,58 @@
       </div>
     </div>
 
-    <!-- Visualizador 3D (Three.js WebGL com Altimetria Real DSM) -->
+    <!-- Visualizador 3D (Three.js WebGL com Relevo DSM Real 512²) -->
     <div id="model3DView" class="hidden relative bg-slate-950 flex items-center justify-center">
       <div id="canvas3dContainer" class="w-full h-full"></div>
       
       <div id="loading3D" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 text-center space-y-3 shadow-2xl backdrop-blur">
         <i class="fa-solid fa-spinner fa-spin text-2xl text-sky-400"></i>
-        <p class="text-xs text-slate-300 font-medium">Reconstruindo Terreno Topográfico 3D com DSM Real...</p>
+        <p class="text-xs text-slate-300 font-medium">Reconstruindo Malha Topográfica 3D em Alta Densidade (512²)...</p>
       </div>
 
-      <!-- Barra de Controle 3D -->
-      <div id="controls3D" class="absolute top-4 right-4 bg-slate-900/90 border border-slate-800 backdrop-blur rounded-2xl p-3 space-y-2 z-10 text-xs shadow-xl">
-        <div class="font-semibold text-slate-200 border-b border-slate-800 pb-1 flex items-center justify-between">
-          <span>Controles 3D</span>
+      <!-- Barra de Controle 3D Avançada -->
+      <div id="controls3D" class="absolute top-4 right-4 bg-slate-900/90 border border-slate-800 backdrop-blur rounded-2xl p-3.5 space-y-3 z-10 text-xs shadow-xl w-64">
+        <div class="font-semibold text-slate-200 border-b border-slate-800 pb-1.5 flex items-center justify-between">
+          <div class="flex items-center gap-1.5">
+            <i class="fa-solid fa-cube text-sky-400 text-xs"></i>
+            <span>Controles 3D HD</span>
+          </div>
           <button onclick="reset3DCamera()" title="Resetar Câmera" class="text-sky-400 hover:text-sky-300">
             <i class="fa-solid fa-rotate text-xs"></i>
           </button>
         </div>
-        <div class="flex items-center justify-between gap-3 text-slate-400">
-          <span>Exagero Vertical:</span>
-          <select id="selectExaggeration" onchange="updateExaggeration(parseFloat(this.value))" class="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200">
-            <option value="1.0" selected>1.0x (Real 1:1)</option>
-            <option value="1.5">1.5x (Realçado)</option>
-            <option value="2.0">2.0x (Destacado)</option>
+
+        <!-- Seletor de Densidade da Malha -->
+        <div class="space-y-1">
+          <div class="text-[11px] text-slate-400 font-medium">Densidade da Malha:</div>
+          <select id="selectMeshDensity" onchange="changeMeshDensity(this.value)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200 font-mono text-[11px]">
+            <option value="512" selected>Ultra (512x512 • 262k vértices)</option>
+            <option value="256">Alta (256x256 • 65k vértices)</option>
+            <option value="128">Média (128x128 • 16k vértices)</option>
           </select>
         </div>
-        <label class="flex items-center justify-between text-slate-400 cursor-pointer pt-1">
+
+        <!-- Seletor de Textura 3D -->
+        <div class="space-y-1">
+          <div class="text-[11px] text-slate-400 font-medium">Textura da Superfície:</div>
+          <select id="select3DTexture" onchange="change3DTexture(this.value)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200 font-mono text-[11px]">
+            <option value="photo" selected>Ortofoto Aérea (Fotorrealista)</option>
+            <option value="dsm">Mapa de Profundidades (Turbo DSM)</option>
+          </select>
+        </div>
+
+        <!-- Exagero Vertical -->
+        <div class="flex items-center justify-between gap-3 text-slate-400 pt-0.5">
+          <span>Exagero Vertical:</span>
+          <select id="selectExaggeration" onchange="updateExaggeration(parseFloat(this.value))" class="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-slate-200 font-mono text-[11px]">
+            <option value="1.0" selected>1.0x (Real)</option>
+            <option value="1.5">1.5x (Realçado)</option>
+            <option value="2.0">2.0x (Destacado)</option>
+            <option value="3.0">3.0x (Extremo)</option>
+          </select>
+        </div>
+
+        <label class="flex items-center justify-between text-slate-400 cursor-pointer pt-1 border-t border-slate-800/80">
           <span>Malha Wireframe:</span>
           <input type="checkbox" id="checkWireframe" onchange="toggleWireframe(this.checked)" class="rounded border-slate-800 bg-slate-950 text-sky-500">
         </label>
@@ -419,6 +482,7 @@
         [-5.814027790470407, -35.20039007443611]   // NE
       ],
       tilesUrl: "./tiles/{z}/{x}/{y}.png",
+      dsmOverlayUrl: "./dsm_color_2048.png",
       minZoom: 14,
       maxNativeZoom: 20, // Nível gravado no disco
       maxZoom: 23        // Super-Zoom ultra aproximado habilitado
@@ -428,14 +492,23 @@
     let map = null;
     let satLayer = null;
     let orthoLayer = null;
+    let dsmLayer = null;
     let boundsLayer = null;
     let shotsLayer = null;
     let notesLayer = null;
     let sideBySideControl = null;
     let splitActive = false;
 
-    // Dados de Altimetria DSM carregados da matriz JSON
-    let elevationData = null; // { rows, cols, baseZ, values }
+    // Matriz de Elevação DSM de Alta Densidade (512x512 Float32 = 262.144 pontos)
+    let elevationGrid = null; // Float32Array de 512x512
+    let elevationMeta = {
+      rows: 512,
+      cols: 512,
+      minElev: 53.23,
+      maxElev: 94.79,
+      baseZ: 63.58,
+      bounds: flightConfig.bounds
+    };
 
     // Estado das Ferramentas Interativas
     let activeTool = null; // 'profile', 'volume', 'distance', 'annotation'
@@ -448,7 +521,7 @@
     let fieldAnnotations = [];
 
     // =========================================================
-    // INICIALIZAÇÃO DO MAPA 2D (LEAFLET COM SUPER-ZOOM)
+    // INICIALIZAÇÃO DO MAPA 2D (LEAFLET COM SUPER-ZOOM & DSM)
     // =========================================================
     async function initMap() {
       map = L.map('mapView', {
@@ -462,14 +535,14 @@
       // Zoom Control posicionado no canto superior direito
       L.control.zoom({ position: 'topright' }).addTo(map);
 
-      // Camada Satélite Esri World Imagery (Base histórica)
+      // 1. Camada Satélite Esri World Imagery (Base histórica)
       satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Esri World Imagery',
         maxNativeZoom: 19,
         maxZoom: flightConfig.maxZoom
       }).addTo(map);
 
-      // Ortofotomosaico GDAL em tiles XYZ com Super-Zoom liberado
+      // 2. Ortofotomosaico GDAL em tiles XYZ com Super-Zoom liberado
       orthoLayer = L.tileLayer(flightConfig.tilesUrl, {
         minZoom: flightConfig.minZoom,
         maxNativeZoom: flightConfig.maxNativeZoom,
@@ -478,7 +551,13 @@
         attribution: 'WebODM Orthophoto (Parque das Serras)'
       }).addTo(map);
 
-      // Perímetro do Levantamento
+      // 3. Camada do Mapa de Profundidades (DSM Hipsométrico 2048² com Hillshade)
+      dsmLayer = L.imageOverlay(flightConfig.dsmOverlayUrl, flightConfig.bounds, {
+        opacity: 0.75,
+        interactive: false
+      }).addTo(map);
+
+      // 4. Perímetro do Levantamento
       boundsLayer = L.rectangle(flightConfig.bounds, {
         color: "#0ea5e9",
         weight: 2,
@@ -487,11 +566,11 @@
         dashArray: "4, 6"
       }).addTo(map);
 
-      // Grupo para Anotações de Campo
+      // 5. Grupo para Anotações de Campo
       notesLayer = L.layerGroup().addTo(map);
 
-      // Carregar Matriz de Elevação DSM (98 KB) em paralelo
-      loadElevationMatrix();
+      // Carregar Matriz de Elevação DSM de Alta Densidade (512x512 Float32 = 1.0 MB)
+      loadHighDensityElevation();
 
       // Carregar Posições das Câmeras (513)
       loadCameraShots();
@@ -513,24 +592,45 @@
     }
 
     // =========================================================
-    // CONSULTA DE ELEVAÇÃO DSM REAL (INTERPOLAÇÃO BILINEAR)
+    // CARREGAMENTO DA MATRIZ BINÁRIA DE ALTA DENSIDADE (512x512)
     // =========================================================
-    async function loadElevationMatrix() {
+    async function loadHighDensityElevation() {
       try {
-        const res = await fetch('./elevation_3d.json');
-        elevationData = await res.json();
-        console.log('Dados de elevação DSM carregados com sucesso. Base Z:', elevationData.baseZ);
+        const [metaRes, binRes] = await Promise.all([
+          fetch('./elevation_meta.json').then(r => r.json()).catch(() => null),
+          fetch('./elevation_512.bin').then(r => r.arrayBuffer())
+        ]);
+        if (metaRes) elevationMeta = metaRes;
+        elevationGrid = new Float32Array(binRes);
+        console.log(`Matriz DSM HD carregada: ${elevationMeta.rows}x${elevationMeta.cols} (${elevationGrid.length} pontos). Cota Base: ${elevationMeta.baseZ}m`);
       } catch (err) {
-        console.warn('Não foi possível carregar elevation_3d.json:', err);
+        console.warn('elevation_512.bin indisponível, recorrendo a elevation_3d.json:', err);
+        try {
+          const res = await fetch('./elevation_3d.json');
+          const data = await res.json();
+          elevationMeta.rows = data.rows;
+          elevationMeta.cols = data.cols;
+          elevationMeta.baseZ = data.baseZ;
+          elevationGrid = new Float32Array(data.rows * data.cols);
+          let idx = 0;
+          for (let r = 0; r < data.rows; r++) {
+            for (let c = 0; c < data.cols; c++) {
+              elevationGrid[idx++] = data.baseZ + data.values[r][c];
+            }
+          }
+        } catch (e2) {
+          console.error('Falha geral no carregamento de elevação:', e2);
+        }
       }
     }
 
+    // Interpolação Bilinear Sub-Métrica de Alta Densidade
     function getElevationAt(lat, lon) {
-      if (!elevationData) return null;
-      const north = flightConfig.bounds[1][0];
-      const south = flightConfig.bounds[0][0];
-      const west = flightConfig.bounds[0][1];
-      const east = flightConfig.bounds[1][1];
+      if (!elevationGrid) return null;
+      const north = elevationMeta.bounds[1][0];
+      const south = elevationMeta.bounds[0][0];
+      const west = elevationMeta.bounds[0][1];
+      const east = elevationMeta.bounds[1][1];
 
       if (lat > north || lat < south || lon < west || lon > east) {
         return null; // Fora do levantamento
@@ -539,28 +639,27 @@
       const rRatio = (north - lat) / (north - south);
       const cRatio = (lon - west) / (east - west);
 
-      const rFloat = rRatio * (elevationData.rows - 1);
-      const cFloat = cRatio * (elevationData.cols - 1);
+      const rFloat = rRatio * (elevationMeta.rows - 1);
+      const cFloat = cRatio * (elevationMeta.cols - 1);
 
       const r0 = Math.floor(rFloat);
-      const r1 = Math.min(r0 + 1, elevationData.rows - 1);
+      const r1 = Math.min(r0 + 1, elevationMeta.rows - 1);
       const c0 = Math.floor(cFloat);
-      const c1 = Math.min(c0 + 1, elevationData.cols - 1);
+      const c1 = Math.min(c0 + 1, elevationMeta.cols - 1);
 
       const dr = rFloat - r0;
       const dc = cFloat - c0;
 
-      const v00 = elevationData.values[r0][c0];
-      const v01 = elevationData.values[r0][c1];
-      const v10 = elevationData.values[r1][c0];
-      const v11 = elevationData.values[r1][c1];
+      const cols = elevationMeta.cols;
+      const v00 = elevationGrid[r0 * cols + c0];
+      const v01 = elevationGrid[r0 * cols + c1];
+      const v10 = elevationGrid[r1 * cols + c0];
+      const v11 = elevationGrid[r1 * cols + c1];
 
-      // Interpolação Bilinear de alta precisão
+      // Interpolação Bilinear precisa
       const top = v00 * (1 - dc) + v01 * dc;
       const bottom = v10 * (1 - dc) + v11 * dc;
-      const relativeZ = top * (1 - dr) + bottom * dr;
-
-      return elevationData.baseZ + relativeZ;
+      return top * (1 - dr) + bottom * dr;
     }
 
     // =========================================================
@@ -632,7 +731,6 @@
       toolPoints.push(latlng);
 
       if (toolPoints.length === 1) {
-        // Marca Ponto A
         toolTempLayer = L.layerGroup().addTo(map);
         const markerA = L.circleMarker(latlng, {
           radius: 6,
@@ -645,7 +743,6 @@
 
         setToolBanner('Ponto A definido. Clique no Ponto B para gerar o perfil de corte...', 'fa-solid fa-chart-area');
       } else if (toolPoints.length === 2) {
-        // Marca Ponto B e Traça Perfil
         const pA = toolPoints[0];
         const pB = toolPoints[1];
 
@@ -665,7 +762,6 @@
         });
         toolTempLayer.addLayer(line);
 
-        // Amostrar elevações e construir gráfico
         generateElevationProfile(pA, pB);
         cancelActiveTool();
       }
@@ -673,7 +769,8 @@
 
     function generateElevationProfile(pA, pB) {
       const totalDist = pA.distanceTo(pB);
-      const steps = 60;
+      // Amostragem de alta resolução (80 pontos ao longo do corte)
+      const steps = 80;
       const distances = [];
       const elevations = [];
       const sampleCoords = [];
@@ -688,7 +785,7 @@
         const dist = t * totalDist;
 
         let elev = getElevationAt(lat, lon);
-        if (elev === null) elev = elevationData ? elevationData.baseZ : 60;
+        if (elev === null) elev = elevationMeta.baseZ;
 
         distances.push(dist.toFixed(1));
         elevations.push(parseFloat(elev.toFixed(2)));
@@ -701,17 +798,14 @@
       const deltaZ = elevations[elevations.length - 1] - elevations[0];
       const avgSlope = ((Math.abs(deltaZ) / totalDist) * 100).toFixed(1);
 
-      // Atualizar métricas no Drawer
       document.getElementById('statProfileLength').innerText = `${totalDist.toFixed(1)} m`;
       document.getElementById('statProfileMinMax').innerText = `${minElev.toFixed(1)} / ${maxElev.toFixed(1)} m`;
       document.getElementById('statProfileDelta').innerText = `${deltaZ >= 0 ? '+' : ''}${deltaZ.toFixed(2)} m`;
       document.getElementById('statProfileSlope').innerText = `${avgSlope} %`;
 
-      // Exibir Drawer
       const drawer = document.getElementById('elevationDrawer');
       drawer.classList.remove('hidden');
 
-      // Desenhar / Atualizar Chart.js
       renderProfileChart(distances, elevations, sampleCoords);
     }
 
@@ -719,7 +813,6 @@
       const ctx = document.getElementById('profileChart').getContext('2d');
       if (profileChartInstance) profileChartInstance.destroy();
 
-      // Gradiente suave para a área sob o perfil
       const gradient = ctx.createLinearGradient(0, 0, 0, 160);
       gradient.addColorStop(0, 'rgba(14, 165, 233, 0.45)');
       gradient.addColorStop(1, 'rgba(14, 165, 233, 0.02)');
@@ -729,7 +822,7 @@
         data: {
           labels: distances,
           datasets: [{
-            label: 'Cota Altimétrica (m)',
+            label: 'Cota Altimétrica HD (m)',
             data: elevations,
             borderColor: '#38bdf8',
             borderWidth: 2.5,
@@ -764,20 +857,20 @@
               displayColors: false,
               callbacks: {
                 title: (items) => `Distância: ${items[0].label} m`,
-                label: (item) => `Altimetria: ${item.formattedValue} m (Z)`
+                label: (item) => `Altimetria HD: ${item.formattedValue} m (Z)`
               }
             }
           },
           scales: {
             x: {
               grid: { color: 'rgba(30, 41, 59, 0.5)' },
-              ticks: { color: '#64748b', font: { size: 10, family: 'monospace' }, maxTicksLimit: 10 },
+              ticks: { color: '#64748b', font: { size: 10, family: 'monospace' }, maxTicksLimit: 12 },
               title: { display: true, text: 'Distância Linear (metros)', color: '#64748b', font: { size: 10 } }
             },
             y: {
               grid: { color: 'rgba(30, 41, 59, 0.5)' },
               ticks: { color: '#64748b', font: { size: 10, family: 'monospace' } },
-              title: { display: true, text: 'Altitude / Cota (m)', color: '#64748b', font: { size: 10 } }
+              title: { display: true, text: 'Altitude DSM (m)', color: '#64748b', font: { size: 10 } }
             }
           },
           onHover: (event, activeElements) => {
@@ -820,7 +913,7 @@
       cancelActiveTool();
       activeTool = 'volume';
       document.getElementById('btnToolVolume').classList.add('ring-2', 'ring-emerald-400', 'bg-emerald-950/60');
-      setToolBanner('Cubagem: Clique nos vértices ao redor da pilha/vala. Dê duplo clique para fechar e calcular.', 'fa-solid fa-cubes-stacked');
+      setToolBanner('Cubagem HD: Clique nos vértices ao redor da pilha/vala. Dê duplo clique para fechar e calcular.', 'fa-solid fa-cubes-stacked');
     }
 
     function handleVolumeClick(latlng) {
@@ -830,7 +923,6 @@
         toolTempLayer = L.layerGroup().addTo(map);
       }
 
-      // Desenha ponto
       const marker = L.circleMarker(latlng, {
         radius: 4,
         fillColor: "#10b981",
@@ -840,7 +932,6 @@
       });
       toolTempLayer.addLayer(marker);
 
-      // Atualiza linha/polígono provisório
       if (toolPoints.length > 1) {
         const polyline = L.polyline(toolPoints, { color: "#10b981", weight: 2, dashArray: "4, 4" });
         toolTempLayer.addLayer(polyline);
@@ -850,19 +941,16 @@
     function calculateVolume(polygonLatLngs) {
       if (polygonLatLngs.length < 3) return;
 
-      // Calcular Área Planar Proporcional em m²
       const lat0 = flightConfig.center[0];
       const rad = Math.PI / 180;
       const mPerLat = 111319.5;
       const mPerLon = 111319.5 * Math.cos(lat0 * rad);
 
-      // Vértices em metros
       const polyMeters = polygonLatLngs.map(p => [
         (p.lat - lat0) * mPerLat,
         (p.lng - flightConfig.center[1]) * mPerLon
       ]);
 
-      // Área 2D via Shoelace formula
       let area = 0;
       for (let i = 0; i < polyMeters.length; i++) {
         const j = (i + 1) % polyMeters.length;
@@ -870,7 +958,6 @@
       }
       area = Math.abs(area / 2);
 
-      // Cota de Referência Base = Média dos vértices do perímetro
       let baseZSum = 0;
       let validVertices = 0;
       polygonLatLngs.forEach(p => {
@@ -880,9 +967,8 @@
           validVertices++;
         }
       });
-      const baseZ = validVertices > 0 ? (baseZSum / validVertices) : (elevationData ? elevationData.baseZ : 60);
+      const baseZ = validVertices > 0 ? (baseZSum / validVertices) : elevationMeta.baseZ;
 
-      // Grid Bounding Box para amostragem volumétrica
       let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
       polygonLatLngs.forEach(p => {
         if (p.lat < minLat) minLat = p.lat;
@@ -891,15 +977,15 @@
         if (p.lng > maxLon) maxLon = p.lng;
       });
 
-      const gridN = 35; // Resolução da malha
+      // Malha de alta amostragem (45x45 células)
+      const gridN = 45;
       const dLat = (maxLat - minLat) / gridN;
       const dLon = (maxLon - minLon) / gridN;
       const cellArea = (dLat * mPerLat) * (dLon * mPerLon);
 
-      let cutVolume = 0;  // Escavação (Z < Base)
-      let fillVolume = 0; // Pilha/Aterro (Z > Base)
+      let cutVolume = 0;
+      let fillVolume = 0;
 
-      // Ray-casting Point-in-polygon
       function isInside(lat, lon) {
         let inside = false;
         for (let i = 0, j = polygonLatLngs.length - 1; i < polygonLatLngs.length; j = i++) {
@@ -928,7 +1014,6 @@
 
       const netVolume = fillVolume - cutVolume;
 
-      // Desenhar polígono final no mapa
       if (toolTempLayer) map.removeLayer(toolTempLayer);
       toolTempLayer = L.polygon(polygonLatLngs, {
         color: "#10b981",
@@ -937,9 +1022,8 @@
         fillOpacity: 0.25
       }).addTo(map);
 
-      // Exibir Card de Resultado de Volume
       const outCard = document.getElementById('measureOutputCard');
-      document.getElementById('measureCardTitle').innerText = 'Estimativa Volumétrica (DroneDB)';
+      document.getElementById('measureCardTitle').innerText = 'Estimativa Volumétrica HD (DroneDB)';
       document.getElementById('measureCardContent').innerHTML = `
         <div class="space-y-1.5 text-slate-300">
           <div class="flex justify-between">
@@ -1151,7 +1235,6 @@
       }
     }
 
-    // Duplo clique fecha polígono de volume
     mapView.addEventListener('dblclick', (e) => {
       if (activeTool === 'volume' && toolPoints.length >= 3) {
         e.stopPropagation();
@@ -1248,6 +1331,26 @@
       else map.removeLayer(orthoLayer);
     }
 
+    function toggleDsm(visible) {
+      if (!dsmLayer) return;
+      const legend = document.getElementById('dsmLegendBadge');
+      if (visible) {
+        map.addLayer(dsmLayer);
+        legend.classList.remove('hidden');
+      } else {
+        map.removeLayer(dsmLayer);
+        legend.classList.add('hidden');
+      }
+    }
+
+    function setOrthoOpacity(val) {
+      if (orthoLayer) orthoLayer.setOpacity(parseFloat(val));
+    }
+
+    function setDsmOpacity(val) {
+      if (dsmLayer) dsmLayer.setOpacity(parseFloat(val));
+    }
+
     function toggleShots(visible) {
       if (!shotsLayer) return;
       if (visible) map.addLayer(shotsLayer);
@@ -1260,10 +1363,6 @@
       else map.removeLayer(boundsLayer);
     }
 
-    function setOrthoOpacity(val) {
-      if (orthoLayer) orthoLayer.setOpacity(parseFloat(val));
-    }
-
     function togglePanelCollapse() {
       const content = document.getElementById('panelContent');
       const icon = document.getElementById('panelCollapseIcon');
@@ -1273,12 +1372,15 @@
     }
 
     // =========================================================
-    // MOTOR 3D TOPOGRÁFICO REAL (THREE.JS + ELEVAÇÃO DSM + ORTOFOTO)
+    // MOTOR 3D TOPOGRÁFICO DE ALTA DENSIDADE (THREE.JS HD)
     // =========================================================
     let scene, camera, renderer, controls;
     let terrainMesh = null;
     let terrainGeometry = null;
-    let baseElevationValues = null;
+    let texturePhoto = null;
+    let textureDsm = null;
+    let currentTextureMode = 'photo';
+    let currentMeshSize = 512;
     let currentExaggeration = 1.0;
     let initialized3D = false;
 
@@ -1290,8 +1392,8 @@
       scene = new THREE.Scene();
       scene.background = new THREE.Color(0x020617);
 
-      camera = new THREE.PerspectiveCamera(45, width / height, 0.5, 2000);
-      camera.position.set(0, 90, 140);
+      camera = new THREE.PerspectiveCamera(45, width / height, 0.5, 2500);
+      camera.position.set(0, 95, 145);
 
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -1303,39 +1405,30 @@
       controls.dampingFactor = 0.05;
       controls.maxPolarAngle = Math.PI / 2 - 0.02;
 
-      // Luzes
+      // Iluminação Topográfica balanceada
       const ambientLight = new THREE.AmbientLight(0xffffff, 0.95);
       scene.add(ambientLight);
-      const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
-      dirLight.position.set(80, 150, 80);
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.65);
+      dirLight.position.set(100, 180, 100);
       scene.add(dirLight);
 
-      // Carregar Elevação DSM e Textura da Ortofoto
+      // Carregar Texturas e Dados de Elevação
       try {
-        const [elevRes, texture] = await Promise.all([
-          fetch('./elevation_3d.json').then(r => r.json()),
-          new Promise((resolve) => new THREE.TextureLoader().load('./texture_3d.jpg', resolve))
+        const loader = new THREE.TextureLoader();
+        const [photo, dsm] = await Promise.all([
+          new Promise((resolve) => loader.load('./texture_3d.jpg', resolve)),
+          new Promise((resolve) => loader.load('./dsm_color_2048.png', resolve))
         ]);
 
-        baseElevationValues = elevRes.values;
-        const rows = elevRes.rows; // 128
-        const cols = elevRes.cols; // 128
+        texturePhoto = photo;
+        textureDsm = dsm;
 
-        const planeWidth = 140;
-        const planeHeight = 140;
+        // Se a malha 512x512 ainda não estiver pronta no array, aguardar
+        if (!elevationGrid) {
+          await loadHighDensityElevation();
+        }
 
-        terrainGeometry = new THREE.PlaneGeometry(planeWidth, planeHeight, cols - 1, rows - 1);
-        applyElevation(currentExaggeration);
-
-        const material = new THREE.MeshStandardMaterial({
-          map: texture,
-          roughness: 0.85,
-          metalness: 0.05
-        });
-
-        terrainMesh = new THREE.Mesh(terrainGeometry, material);
-        terrainMesh.rotation.x = -Math.PI / 2;
-        scene.add(terrainMesh);
+        buildTerrainMesh(currentMeshSize);
 
         // Grade de base sutil
         const grid = new THREE.GridHelper(180, 18, 0x1e293b, 0x0f172a);
@@ -1368,16 +1461,47 @@
       initialized3D = true;
     }
 
-    function applyElevation(exaggeration) {
-      if (!terrainGeometry || !baseElevationValues) return;
+    function buildTerrainMesh(gridSize) {
+      if (terrainMesh) {
+        scene.remove(terrainMesh);
+        if (terrainGeometry) terrainGeometry.dispose();
+      }
+
+      currentMeshSize = parseInt(gridSize);
+      const planeWidth = 140;
+      const planeHeight = 140;
+
+      terrainGeometry = new THREE.PlaneGeometry(planeWidth, planeHeight, currentMeshSize - 1, currentMeshSize - 1);
+      applyElevationHD(currentExaggeration);
+
+      const activeTexture = currentTextureMode === 'dsm' ? textureDsm : texturePhoto;
+      const material = new THREE.MeshStandardMaterial({
+        map: activeTexture,
+        roughness: 0.85,
+        metalness: 0.05
+      });
+
+      terrainMesh = new THREE.Mesh(terrainGeometry, material);
+      terrainMesh.rotation.x = -Math.PI / 2;
+      scene.add(terrainMesh);
+    }
+
+    function applyElevationHD(exaggeration) {
+      if (!terrainGeometry || !elevationGrid) return;
       const pos = terrainGeometry.attributes.position;
-      const rows = baseElevationValues.length;
-      const cols = baseElevationValues[0].length;
+      const N = currentMeshSize;
+      const srcRows = elevationMeta.rows;
+      const srcCols = elevationMeta.cols;
+      const baseZ = elevationMeta.baseZ;
 
       let idx = 0;
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const h = baseElevationValues[r][c] * 0.45 * exaggeration;
+      for (let r = 0; r < N; r++) {
+        const srcR = Math.floor((r / (N - 1)) * (srcRows - 1));
+        for (let c = 0; c < N; c++) {
+          const srcC = Math.floor((c / (N - 1)) * (srcCols - 1));
+          const elev = elevationGrid[srcR * srcCols + srcC];
+          // Escala proporcional no Three.js
+          const h = (elev - baseZ) * 0.45 * exaggeration;
           pos.setZ(idx, h);
           idx++;
         }
@@ -1388,7 +1512,21 @@
 
     function updateExaggeration(val) {
       currentExaggeration = val;
-      applyElevation(currentExaggeration);
+      applyElevationHD(currentExaggeration);
+    }
+
+    function changeMeshDensity(val) {
+      buildTerrainMesh(val);
+      const isWire = document.getElementById('checkWireframe').checked;
+      toggleWireframe(isWire);
+    }
+
+    function change3DTexture(mode) {
+      currentTextureMode = mode;
+      if (terrainMesh && terrainMesh.material) {
+        terrainMesh.material.map = (mode === 'dsm') ? textureDsm : texturePhoto;
+        terrainMesh.material.needsUpdate = true;
+      }
     }
 
     function toggleWireframe(val) {
@@ -1399,7 +1537,7 @@
 
     function reset3DCamera() {
       if (camera && controls) {
-        camera.position.set(0, 90, 140);
+        camera.position.set(0, 95, 145);
         controls.target.set(0, 0, 0);
         controls.update();
       }
@@ -1416,6 +1554,7 @@
       const model3DView = document.getElementById('model3DView');
       const toolsPanel = document.getElementById('toolsPanel');
       const liveElev = document.getElementById('liveElevationBadge');
+      const dsmLegend = document.getElementById('dsmLegendBadge');
 
       if (mode === '2D') {
         btn2D.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 text-white transition flex items-center gap-1.5 shadow";
@@ -1424,6 +1563,7 @@
         model3DView.classList.add('hidden');
         toolsPanel.classList.remove('hidden');
         liveElev.classList.remove('hidden');
+        if (dsmLayer && map.hasLayer(dsmLayer)) dsmLegend.classList.remove('hidden');
         if (map) map.invalidateSize();
       } else {
         btn3D.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 text-white transition flex items-center gap-1.5 shadow";
@@ -1432,6 +1572,7 @@
         model3DView.classList.remove('hidden');
         toolsPanel.classList.add('hidden');
         liveElev.classList.add('hidden');
+        dsmLegend.classList.add('hidden');
         closeElevationDrawer();
         if (!initialized3D) init3D();
       }
